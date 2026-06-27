@@ -14,7 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      owned_characters: {
+        Row: {
+          acquired_at: string
+          character_key: string
+          equipped: boolean
+          id: string
+          user_id: string
+        }
+        Insert: {
+          acquired_at?: string
+          character_key: string
+          equipped?: boolean
+          id?: string
+          user_id: string
+        }
+        Update: {
+          acquired_at?: string
+          character_key?: string
+          equipped?: boolean
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      owned_surfboards: {
+        Row: {
+          acquired_at: string
+          equipped: boolean
+          id: string
+          surfboard_key: string
+          user_id: string
+        }
+        Insert: {
+          acquired_at?: string
+          equipped?: boolean
+          id?: string
+          surfboard_key: string
+          user_id: string
+        }
+        Update: {
+          acquired_at?: string
+          equipped?: boolean
+          id?: string
+          surfboard_key?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      player_settings: {
+        Row: {
+          graphics_quality: string
+          music_enabled: boolean
+          notifications_enabled: boolean
+          sound_enabled: boolean
+          updated_at: string
+          user_id: string
+          vibration_enabled: boolean
+        }
+        Insert: {
+          graphics_quality?: string
+          music_enabled?: boolean
+          notifications_enabled?: boolean
+          sound_enabled?: boolean
+          updated_at?: string
+          user_id: string
+          vibration_enabled?: boolean
+        }
+        Update: {
+          graphics_quality?: string
+          music_enabled?: boolean
+          notifications_enabled?: boolean
+          sound_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+          vibration_enabled?: boolean
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          coins: number
+          created_at: string
+          current_world: string
+          gems: number
+          highest_score: number
+          id: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          coins?: number
+          created_at?: string
+          current_world?: string
+          gems?: number
+          highest_score?: number
+          id: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          coins?: number
+          created_at?: string
+          current_world?: string
+          gems?: number
+          highest_score?: number
+          id?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
