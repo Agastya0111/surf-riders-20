@@ -1,0 +1,874 @@
+// Surf Riders 2.0 — Sunny Beach endless runner engine (Canvas 2D)
+// Self-contained, mobile-first, 3-lane runner.
+
+export type GameStatus = "intro" | "playing" | "paused" | "gameover";
+
+export type GameState = {
+  status: GameStatus;
+  score: number;
+  distance: number; // meters
+  coins: number;
+  combo: number;
+  comboTimer: number; // seconds remaining
+  multiplier: number;
+  health: number;
+  bossHealth: number;
+  bossActive: boolean;
+  bossDefeated: boolean;
+};
+
+export type GameCallbacks = {
+  onStateChange: (s: GameState) => void;
+  onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
+};
+
+type Lane = -1 | 0 | 1;
+
+type Obstacle = {
+  type: "rock" | "palm" | "wave" | "crab";
+  lane: Lane;
+  z: number; // distance ahead (world units)
+  hit: boolean;
+  size: number;
+};
+
+type Pickup = {
+  type: "coin" | "chest";
+  lane: Lane;
+  z: number;
+  y: number; // vertical offset (for arcs)
+  collected: boolean;
+};
+
+const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
+const ROAD_HALF_WIDTH = 1.6; // world units
+const HORIZON_Y_RATIO = 0.42;
+const FAR_Z = 80;
+const NEAR_Z = 2;
+
+export class SurfGame {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private cb: GameCallbacks;
+  private raf = 0;
+  private last = 0;
+  private dpr = 1;
+  private w = 0;
+  private h = 0;
+
+  // player
+  private lane: Lane = 0;
+  private laneAnim = 0; // smoothed
+  private jump = 0; // 0..1 height
+  private jumping = false;
+  private jumpV = 0;
+  private sliding = false;
+  private slideTimer = 0;
+  private dashTimer = 0;
+  private bob = 0;
+  private invuln = 0;
+
+  // world
+  private speed = 14; // base world units per second
+  private targetSpeed = 14;
+  private obstacles: Obstacle[] = [];
+  private pickups: Pickup[] = [];
+  private spawnZ = FAR_Z;
+  private pickupSpawnZ = FAR_Z;
+  private distFloat = 0;
+  private scoreFloat = 0;
+  private waveOffset = 0;
+  private cloudOffset = 0;
+  private nextChestAt = 250;
+  private bossSpawned = false;
+  private bossZ = 0;
+  private bossLane: Lane = 0;
+  private bossLaneTimer = 0;
+  private bossAttackTimer = 2;
+  private bossHits = 0;
+  private particles: { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }[] = [];
+
+  // input
+  private touchStart: { x: number; y: number; t: number } | null = null;
+  private lastTap = 0;
+
+  state: GameState = {
+    status: "intro",
+    score: 0,
+    distance: 0,
+    coins: 0,
+    combo: 0,
+    comboTimer: 0,
+    multiplier: 1,
+    health: 3,
+    bossHealth: 6,
+    bossActive: false,
+    bossDefeated: false,
+  };
+
+  constructor(canvas: HTMLCanvasElement, cb: GameCallbacks) {
+    this.canvas = canvas;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) throw new Error("Canvas 2D unavailable");
+    this.ctx = ctx;
+    this.cb = cb;
+    this.resize();
+    this.bindInput();
+  }
+
+  start() {
+    this.state.status = "playing";
+    this.emit();
+    this.last = performance.now();
+    this.loop();
+  }
+
+  pause() {
+    if (this.state.status !== "playing") return;
+    this.state.status = "paused";
+    this.emit();
+  }
+
+  resume() {
+    if (this.state.status !== "paused") return;
+    this.state.status = "playing";
+    this.last = performance.now();
+    this.emit();
+  }
+
+  restart() {
+    cancelAnimationFrame(this.raf);
+    this.lane = 0;
+    this.laneAnim = 0;
+    this.jump = 0;
+    this.jumping = false;
+    this.jumpV = 0;
+    this.sliding = false;
+    this.slideTimer = 0;
+    this.dashTimer = 0;
+    this.invuln = 0;
+    this.speed = 14;
+    this.targetSpeed = 14;
+    this.obstacles = [];
+    this.pickups = [];
+    this.particles = [];
+    this.spawnZ = FAR_Z;
+    this.pickupSpawnZ = FAR_Z;
+    this.distFloat = 0;
+    this.scoreFloat = 0;
+    this.nextChestAt = 250;
+    this.bossSpawned = false;
+    this.bossHits = 0;
+    this.state = {
+      status: "playing",
+      score: 0,
+      distance: 0,
+      coins: 0,
+      combo: 0,
+      comboTimer: 0,
+      multiplier: 1,
+      health: 3,
+      bossHealth: 6,
+      bossActive: false,
+      bossDefeated: false,
+    };
+    this.emit();
+    this.last = performance.now();
+    this.loop();
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.raf);
+    this.unbindInput();
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.w = Math.max(320, rect.width);
+    this.h = Math.max(480, rect.height);
+    this.canvas.width = Math.floor(this.w * this.dpr);
+    this.canvas.height = Math.floor(this.h * this.dpr);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  // ---------- input ----------
+  private keyHandler = (e: KeyboardEvent) => {
+    if (this.state.status === "gameover") return;
+    const k = e.key.toLowerCase();
+    if (k === "p" || k === "escape") {
+      this.state.status === "playing" ? this.pause() : this.resume();
+      return;
+    }
+    if (this.state.status !== "playing") return;
+    if (k === "arrowleft" || k === "a") this.move(-1);
+    else if (k === "arrowright" || k === "d") this.move(1);
+    else if (k === "arrowup" || k === "w" || k === " ") { e.preventDefault(); this.doJump(); }
+    else if (k === "arrowdown" || k === "s") this.doSlide();
+    else if (k === "shift") this.doDash();
+  };
+
+  private touchStartHandler = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    this.touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+  };
+
+  private touchEndHandler = (e: TouchEvent) => {
+    if (!this.touchStart || this.state.status !== "playing") { this.touchStart = null; return; }
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - this.touchStart.x;
+    const dy = t.clientY - this.touchStart.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const dt = performance.now() - this.touchStart.t;
+    if (adx < 24 && ady < 24 && dt < 250) {
+      // tap or double-tap
+      const now = performance.now();
+      if (now - this.lastTap < 280) { this.doDash(); this.lastTap = 0; }
+      else this.lastTap = now;
+    } else if (adx > ady) {
+      this.move(dx > 0 ? 1 : -1);
+    } else {
+      if (dy < 0) this.doJump(); else this.doSlide();
+    }
+    this.touchStart = null;
+  };
+
+  private resizeHandler = () => this.resize();
+
+  private bindInput() {
+    window.addEventListener("keydown", this.keyHandler);
+    this.canvas.addEventListener("touchstart", this.touchStartHandler, { passive: true });
+    this.canvas.addEventListener("touchend", this.touchEndHandler, { passive: true });
+    window.addEventListener("resize", this.resizeHandler);
+  }
+
+  private unbindInput() {
+    window.removeEventListener("keydown", this.keyHandler);
+    this.canvas.removeEventListener("touchstart", this.touchStartHandler);
+    this.canvas.removeEventListener("touchend", this.touchEndHandler);
+    window.removeEventListener("resize", this.resizeHandler);
+  }
+
+  private move(dir: -1 | 1) {
+    const next = Math.max(-1, Math.min(1, this.lane + dir)) as Lane;
+    if (next !== this.lane) this.lane = next;
+  }
+
+  private doJump() {
+    if (!this.jumping && !this.sliding) {
+      this.jumping = true;
+      this.jumpV = 6.5;
+    }
+  }
+
+  private doSlide() {
+    if (!this.jumping && !this.sliding) {
+      this.sliding = true;
+      this.slideTimer = 0.55;
+    }
+  }
+
+  private doDash() {
+    if (this.dashTimer <= 0) {
+      this.dashTimer = 0.9;
+      this.invuln = Math.max(this.invuln, 0.6);
+      this.targetSpeed = this.speed + 18;
+      for (let i = 0; i < 12; i++) {
+        this.particles.push({
+          x: this.w * 0.5 + (Math.random() - 0.5) * 60,
+          y: this.h * 0.78 + (Math.random() - 0.5) * 30,
+          vx: -Math.random() * 200 - 50,
+          vy: (Math.random() - 0.5) * 60,
+          life: 0.5,
+          color: "rgba(255,255,255,0.9)",
+          size: 4 + Math.random() * 4,
+        });
+      }
+    }
+  }
+
+  // ---------- loop ----------
+  private loop = () => {
+    if (this.state.status !== "playing") return;
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - this.last) / 1000);
+    this.last = now;
+    this.update(dt);
+    this.render();
+    this.raf = requestAnimationFrame(this.loop);
+  };
+
+  private emit() { this.cb.onStateChange({ ...this.state }); }
+
+  private update(dt: number) {
+    // speed ramp
+    if (!this.state.bossActive) {
+      this.targetSpeed = Math.min(28, 14 + this.distFloat / 120);
+    }
+    this.speed += (this.targetSpeed - this.speed) * Math.min(1, dt * 2);
+
+    // timers
+    if (this.dashTimer > 0) {
+      this.dashTimer -= dt;
+      if (this.dashTimer <= 0) this.targetSpeed = 14 + this.distFloat / 120;
+    }
+    if (this.invuln > 0) this.invuln -= dt;
+    if (this.slideTimer > 0) { this.slideTimer -= dt; if (this.slideTimer <= 0) this.sliding = false; }
+    if (this.jumping) {
+      this.jump += this.jumpV * dt;
+      this.jumpV -= 18 * dt;
+      if (this.jump <= 0) { this.jump = 0; this.jumping = false; this.jumpV = 0; }
+    }
+    this.bob += dt * 6;
+    this.laneAnim += (this.lane - this.laneAnim) * Math.min(1, dt * 12);
+    this.waveOffset = (this.waveOffset + dt * 40) % 200;
+    this.cloudOffset = (this.cloudOffset + dt * 8) % this.w;
+
+    // distance / score
+    this.distFloat += this.speed * dt;
+    const mult = 1 + Math.floor(this.state.combo / 5) * 0.5;
+    this.state.multiplier = mult;
+    this.scoreFloat += this.speed * dt * mult;
+    this.state.distance = Math.floor(this.distFloat);
+    this.state.score = Math.floor(this.scoreFloat);
+
+    // combo timer
+    if (this.state.comboTimer > 0) {
+      this.state.comboTimer -= dt;
+      if (this.state.comboTimer <= 0) { this.state.combo = 0; }
+    }
+
+    // spawn obstacles
+    if (!this.state.bossActive && !this.bossSpawned) {
+      this.spawnZ -= this.speed * dt;
+      while (this.spawnZ <= 0) {
+        this.spawnObstacleRow();
+        this.spawnZ += 6 + Math.random() * 4;
+      }
+      this.pickupSpawnZ -= this.speed * dt;
+      while (this.pickupSpawnZ <= 0) {
+        this.spawnPickupRow();
+        this.pickupSpawnZ += 3 + Math.random() * 3;
+      }
+    }
+
+    // move world
+    for (const o of this.obstacles) o.z -= this.speed * dt;
+    for (const p of this.pickups) p.z -= this.speed * dt;
+
+    // boss trigger at 600m, or every 800m after defeat (endless)
+    if (!this.bossSpawned && this.distFloat >= 600) {
+      this.bossSpawned = true;
+      this.state.bossActive = true;
+      this.state.bossHealth = 6;
+      this.bossHits = 0;
+      this.bossZ = 24;
+      this.bossLane = 0;
+      this.bossLaneTimer = 1.2;
+      this.bossAttackTimer = 2;
+      this.targetSpeed = 12;
+      this.emit();
+    }
+
+    // boss behavior
+    if (this.state.bossActive) {
+      this.bossZ -= this.speed * dt * 0.05; // hovers ahead
+      if (this.bossZ < 6) this.bossZ = 6;
+      this.bossLaneTimer -= dt;
+      if (this.bossLaneTimer <= 0) {
+        const lanes: Lane[] = [-1, 0, 1];
+        this.bossLane = lanes[Math.floor(Math.random() * 3)];
+        this.bossLaneTimer = 1.5 + Math.random();
+      }
+      this.bossAttackTimer -= dt;
+      if (this.bossAttackTimer <= 0) {
+        // spawn rock attack from boss
+        this.obstacles.push({ type: "rock", lane: this.bossLane, z: this.bossZ - 1, hit: false, size: 1 });
+        this.bossAttackTimer = 1.4 + Math.random() * 0.8;
+      }
+      // collide with boss to damage when dashing
+      if (this.dashTimer > 0 && this.bossZ < 4 && this.bossLane === this.lane) {
+        this.bossHits++;
+        this.state.bossHealth = Math.max(0, 6 - this.bossHits);
+        this.bossZ = 18;
+        this.burst(this.w / 2, this.h * 0.55, "#ff7a59");
+        this.emit();
+        if (this.bossHits >= 6) {
+          this.state.bossActive = false;
+          this.state.bossDefeated = true;
+          this.scoreFloat += 500;
+          this.targetSpeed = 16;
+          this.bossSpawned = false; // allow another boss later (endless)
+          this.distFloat += 200;
+          this.burst(this.w / 2, this.h * 0.55, "#ffd166");
+          this.emit();
+        }
+      }
+    }
+
+    // collisions
+    const playerLane = this.laneAnim;
+    for (const o of this.obstacles) {
+      if (o.hit || o.z > 1.4 || o.z < -1) continue;
+      const laneDiff = Math.abs(o.lane - playerLane);
+      if (laneDiff > 0.55) continue;
+      // jump clears short obstacles (rocks low); slide clears palm low branches/waves
+      const cleared =
+        (o.type === "rock" && this.jump > 0.6) ||
+        (o.type === "wave" && this.sliding) ||
+        (o.type === "palm" && this.sliding);
+      if (cleared) { o.hit = true; continue; }
+      if (this.invuln > 0 || this.dashTimer > 0) { o.hit = true; this.burst(this.w / 2, this.h * 0.7, "#9ad8ff"); continue; }
+      o.hit = true;
+      this.takeHit();
+    }
+
+    for (const p of this.pickups) {
+      if (p.collected || p.z > 1.2 || p.z < -1) continue;
+      const laneDiff = Math.abs(p.lane - playerLane);
+      if (laneDiff > 0.5) continue;
+      // coins float a bit; sliding misses high coins, jumping grabs them
+      if (p.type === "coin") {
+        const playerY = this.jump * 1.2 - (this.sliding ? 0.3 : 0);
+        if (Math.abs(playerY - p.y) > 1.1) continue;
+      }
+      p.collected = true;
+      if (p.type === "coin") {
+        this.state.coins += 1;
+        this.state.combo += 1;
+        this.state.comboTimer = 2.2;
+        this.scoreFloat += 10 * this.state.multiplier;
+        this.burst(this.w / 2, this.h * 0.62, "#ffd166");
+      } else {
+        this.state.coins += 25;
+        this.state.combo += 5;
+        this.state.comboTimer = 2.5;
+        this.scoreFloat += 200;
+        this.burst(this.w / 2, this.h * 0.6, "#ffb86b");
+      }
+      this.emit();
+    }
+
+    // cull
+    this.obstacles = this.obstacles.filter((o) => o.z > -2);
+    this.pickups = this.pickups.filter((p) => p.z > -2);
+
+    // particles
+    for (const pr of this.particles) {
+      pr.x += pr.vx * dt;
+      pr.y += pr.vy * dt;
+      pr.vy += 200 * dt;
+      pr.life -= dt;
+    }
+    this.particles = this.particles.filter((p) => p.life > 0);
+  }
+
+  private spawnObstacleRow() {
+    // pick a "safe" lane
+    const lanes: Lane[] = [-1, 0, 1];
+    const safe = lanes[Math.floor(Math.random() * 3)];
+    const types: Obstacle["type"][] = ["rock", "palm", "wave"];
+    for (const l of lanes) {
+      if (l === safe) continue;
+      if (Math.random() < 0.55) {
+        const t = types[Math.floor(Math.random() * types.length)];
+        this.obstacles.push({ type: t, lane: l, z: FAR_Z, hit: false, size: 1 });
+      }
+    }
+  }
+
+  private spawnPickupRow() {
+    const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
+    // chest occasionally
+    if (this.distFloat >= this.nextChestAt) {
+      this.nextChestAt += 220 + Math.random() * 180;
+      this.pickups.push({ type: "chest", lane, z: FAR_Z, y: 0, collected: false });
+      return;
+    }
+    // line of 3-5 coins, maybe arcing
+    const count = 3 + Math.floor(Math.random() * 3);
+    const arc = Math.random() < 0.3;
+    for (let i = 0; i < count; i++) {
+      const y = arc ? Math.sin((i / (count - 1)) * Math.PI) * 1.2 : 0;
+      this.pickups.push({ type: "coin", lane, z: FAR_Z + i * 1.4, y, collected: false });
+    }
+  }
+
+  private takeHit() {
+    this.state.health -= 1;
+    this.state.combo = 0;
+    this.state.comboTimer = 0;
+    this.invuln = 1.2;
+    this.targetSpeed = Math.max(10, this.speed - 6);
+    this.burst(this.w / 2, this.h * 0.7, "#ff5577");
+    this.emit();
+    if (this.state.health <= 0) this.gameOver();
+  }
+
+  private gameOver() {
+    this.state.status = "gameover";
+    this.emit();
+    cancelAnimationFrame(this.raf);
+    this.cb.onGameOver({
+      score: this.state.score,
+      coins: this.state.coins,
+      distance: this.state.distance,
+      bossDefeated: this.state.bossDefeated,
+    });
+  }
+
+  private burst(x: number, y: number, color: string) {
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 80 + Math.random() * 180;
+      this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, life: 0.6, color, size: 3 + Math.random() * 4 });
+    }
+  }
+
+  // ---------- render ----------
+  private project(z: number, laneOffset: number, yWorld = 0) {
+    // z: distance from camera (positive = ahead). near small z -> larger scale.
+    const horizonY = this.h * HORIZON_Y_RATIO;
+    const groundBottomY = this.h * 1.02;
+    const t = Math.max(0.001, z / FAR_Z); // 0 near .. 1 far
+    const persp = 1 / (z * 0.08 + 1); // 1 near .. small far
+    const screenY = horizonY + (groundBottomY - horizonY) * (1 - t);
+    const laneScreenX = this.w / 2 + laneOffset * (this.w * 0.22) * persp;
+    const scale = persp;
+    return { x: laneScreenX, y: screenY - yWorld * 60 * persp, scale };
+  }
+
+  private render() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.w, this.h);
+
+    // sky gradient
+    const sky = ctx.createLinearGradient(0, 0, 0, this.h * HORIZON_Y_RATIO);
+    sky.addColorStop(0, "#ffd9a8");
+    sky.addColorStop(0.5, "#ffb27a");
+    sky.addColorStop(1, "#7ed1e6");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, this.w, this.h * HORIZON_Y_RATIO);
+
+    // sun
+    ctx.fillStyle = "rgba(255,230,160,0.9)";
+    ctx.beginPath();
+    ctx.arc(this.w * 0.7, this.h * 0.22, this.h * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+
+    // clouds
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    for (let i = 0; i < 4; i++) {
+      const cx = ((i * 240) - this.cloudOffset + this.w) % (this.w + 240) - 120;
+      const cy = this.h * (0.12 + (i % 2) * 0.06);
+      this.cloud(cx, cy, 40 + (i % 2) * 20);
+    }
+
+    // distant mountains
+    ctx.fillStyle = "#5a8fa6";
+    ctx.beginPath();
+    ctx.moveTo(0, this.h * HORIZON_Y_RATIO);
+    for (let x = 0; x <= this.w; x += 40) {
+      const y = this.h * HORIZON_Y_RATIO - Math.sin(x * 0.012) * 18 - 12;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(this.w, this.h * HORIZON_Y_RATIO);
+    ctx.closePath();
+    ctx.fill();
+
+    // ocean (left) + beach (right) — actually surf on the water; the road is water
+    // Ground gradient (water)
+    const water = ctx.createLinearGradient(0, this.h * HORIZON_Y_RATIO, 0, this.h);
+    water.addColorStop(0, "#3aa6c8");
+    water.addColorStop(0.5, "#1f6f99");
+    water.addColorStop(1, "#0f3a5e");
+    ctx.fillStyle = water;
+    ctx.fillRect(0, this.h * HORIZON_Y_RATIO, this.w, this.h - this.h * HORIZON_Y_RATIO);
+
+    // wave lines (perspective)
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 16; i++) {
+      const z = i * 5 + ((this.waveOffset / 40) * 5) % 5;
+      const left = this.project(z, -ROAD_HALF_WIDTH);
+      const right = this.project(z, ROAD_HALF_WIDTH);
+      ctx.beginPath();
+      ctx.moveTo(left.x, left.y);
+      ctx.lineTo(right.x, right.y);
+      ctx.stroke();
+    }
+
+    // lane stripes
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.setLineDash([12, 18]);
+    for (const lane of [-0.5, 0.5]) {
+      ctx.beginPath();
+      const near = this.project(NEAR_Z, lane);
+      const far = this.project(FAR_Z, lane);
+      ctx.moveTo(near.x, near.y);
+      ctx.lineTo(far.x, far.y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // sort scene items by z desc (far first)
+    type SceneItem = { z: number; draw: () => void };
+    const items: SceneItem[] = [];
+
+    for (const o of this.obstacles) {
+      if (o.hit) continue;
+      items.push({ z: o.z, draw: () => this.drawObstacle(o) });
+    }
+    for (const p of this.pickups) {
+      if (p.collected) continue;
+      items.push({ z: p.z, draw: () => this.drawPickup(p) });
+    }
+    if (this.state.bossActive) {
+      items.push({ z: this.bossZ, draw: () => this.drawBoss() });
+    }
+
+    // beach sides — palms scrolling
+    const palmRail = (((this.distFloat * 3) % 6));
+    for (let i = 0; i < 10; i++) {
+      const z = i * 6 - palmRail + 2;
+      if (z < NEAR_Z || z > FAR_Z) continue;
+      items.push({ z, draw: () => this.drawSidePalm(z, -1) });
+      items.push({ z: z + 0.01, draw: () => this.drawSidePalm(z, 1) });
+    }
+
+    items.sort((a, b) => b.z - a.z);
+    for (const it of items) it.draw();
+
+    // player
+    this.drawPlayer();
+
+    // particles
+    for (const p of this.particles) {
+      ctx.globalAlpha = Math.max(0, p.life / 0.6);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // foreground vignette
+    const vg = ctx.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.3, this.w / 2, this.h / 2, this.h * 0.7);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,20,40,0.45)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, this.w, this.h);
+  }
+
+  private cloud(x: number, y: number, r: number) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.8, y + 4, r * 0.7, 0, Math.PI * 2);
+    ctx.arc(x - r * 0.8, y + 6, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawSidePalm(z: number, side: -1 | 1) {
+    const ctx = this.ctx;
+    const p = this.project(z, side * (ROAD_HALF_WIDTH + 1.2));
+    const s = p.scale;
+    if (s < 0.05) return;
+    // trunk
+    ctx.fillStyle = "#5a3a22";
+    ctx.fillRect(p.x - 4 * s, p.y - 70 * s, 8 * s, 70 * s);
+    // fronds
+    ctx.fillStyle = "#2fa86a";
+    for (let a = 0; a < 6; a++) {
+      const ang = (a / 6) * Math.PI * 2 + 0.3;
+      ctx.beginPath();
+      ctx.ellipse(p.x + Math.cos(ang) * 22 * s, p.y - 70 * s + Math.sin(ang) * 14 * s, 24 * s, 8 * s, ang, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, 12 * s, 3 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawObstacle(o: Obstacle) {
+    const ctx = this.ctx;
+    const p = this.project(o.z, LANE_OFFSETS[o.lane]);
+    const s = p.scale;
+    if (s < 0.04) return;
+    if (o.type === "rock") {
+      ctx.fillStyle = "#3a4a55";
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 12 * s, 28 * s, 18 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#556773";
+      ctx.beginPath();
+      ctx.ellipse(p.x - 6 * s, p.y - 16 * s, 18 * s, 10 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (o.type === "palm") {
+      ctx.fillStyle = "#5a3a22";
+      ctx.fillRect(p.x - 5 * s, p.y - 90 * s, 10 * s, 90 * s);
+      ctx.fillStyle = "#2fa86a";
+      for (let a = 0; a < 6; a++) {
+        const ang = (a / 6) * Math.PI * 2 + 0.3;
+        ctx.beginPath();
+        ctx.ellipse(p.x + Math.cos(ang) * 28 * s, p.y - 90 * s + Math.sin(ang) * 16 * s, 30 * s, 10 * s, ang, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // wave
+      ctx.fillStyle = "#bfe8ff";
+      ctx.beginPath();
+      ctx.moveTo(p.x - 40 * s, p.y);
+      ctx.quadraticCurveTo(p.x, p.y - 32 * s, p.x + 40 * s, p.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 20 * s, 30 * s, 4 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawPickup(p: Pickup) {
+    const ctx = this.ctx;
+    const pr = this.project(p.z, LANE_OFFSETS[p.lane], p.y);
+    const s = pr.scale;
+    if (s < 0.04) return;
+    if (p.type === "coin") {
+      const spin = Math.sin(this.bob + p.z) * 0.9;
+      ctx.fillStyle = "#ffd166";
+      ctx.beginPath();
+      ctx.ellipse(pr.x, pr.y - 28 * s, Math.max(2, 14 * s * Math.abs(Math.cos(spin))), 14 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#b8860b";
+      ctx.lineWidth = Math.max(1, 2 * s);
+      ctx.stroke();
+    } else {
+      // chest
+      ctx.fillStyle = "#8b5a2b";
+      ctx.fillRect(pr.x - 22 * s, pr.y - 24 * s, 44 * s, 22 * s);
+      ctx.fillStyle = "#c8964f";
+      ctx.fillRect(pr.x - 22 * s, pr.y - 36 * s, 44 * s, 14 * s);
+      ctx.fillStyle = "#ffd166";
+      ctx.fillRect(pr.x - 4 * s, pr.y - 28 * s, 8 * s, 10 * s);
+      // glow
+      ctx.fillStyle = "rgba(255,209,102,0.35)";
+      ctx.beginPath();
+      ctx.arc(pr.x, pr.y - 30 * s, 38 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawBoss() {
+    const ctx = this.ctx;
+    const p = this.project(this.bossZ, LANE_OFFSETS[this.bossLane]);
+    const s = p.scale;
+    // crab body
+    const bx = p.x, by = p.y - 50 * s;
+    ctx.fillStyle = "#d94e3a";
+    ctx.beginPath();
+    ctx.ellipse(bx, by, 80 * s, 50 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // eyes
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(bx - 22 * s, by - 28 * s, 10 * s, 0, Math.PI * 2);
+    ctx.arc(bx + 22 * s, by - 28 * s, 10 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(bx - 22 * s, by - 28 * s, 5 * s, 0, Math.PI * 2);
+    ctx.arc(bx + 22 * s, by - 28 * s, 5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    // claws
+    ctx.fillStyle = "#b83a28";
+    const claw = Math.sin(this.bob * 1.2) * 6 * s;
+    ctx.beginPath();
+    ctx.ellipse(bx - 90 * s, by + 10 * s + claw, 28 * s, 18 * s, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(bx + 90 * s, by + 10 * s - claw, 28 * s, 18 * s, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // health bar above
+    if (s > 0.3) {
+      const w = 120 * s;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(bx - w / 2, by - 70 * s, w, 8 * s);
+      ctx.fillStyle = "#ff7a59";
+      ctx.fillRect(bx - w / 2, by - 70 * s, w * (this.state.bossHealth / 6), 8 * s);
+    }
+  }
+
+  private drawPlayer() {
+    const ctx = this.ctx;
+    const baseY = this.h * 0.82;
+    const x = this.w / 2 + this.laneAnim * (this.w * 0.22);
+    const y = baseY - this.jump * 80 + (this.sliding ? 18 : 0) + Math.sin(this.bob) * 3;
+    const flicker = this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0;
+    if (flicker) ctx.globalAlpha = 0.5;
+
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(x, baseY + 12, 36 - this.jump * 18, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // surfboard
+    ctx.save();
+    ctx.translate(x, y + (this.sliding ? 4 : 10));
+    ctx.rotate(this.laneAnim * -0.15);
+    const grad = ctx.createLinearGradient(-50, 0, 50, 0);
+    grad.addColorStop(0, "#ffd166");
+    grad.addColorStop(1, "#ff7a59");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 50, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fillRect(-30, -2, 60, 3);
+    ctx.restore();
+
+    // body — surfer (simple)
+    const bodyH = this.sliding ? 28 : 46;
+    // legs
+    ctx.fillStyle = "#1b3b5a";
+    ctx.fillRect(x - 10, y - bodyH * 0.4, 8, bodyH * 0.4);
+    ctx.fillRect(x + 2, y - bodyH * 0.4, 8, bodyH * 0.4);
+    // torso
+    ctx.fillStyle = "#21c2c2";
+    ctx.fillRect(x - 14, y - bodyH, 28, bodyH * 0.6);
+    // head
+    ctx.fillStyle = "#f3c79b";
+    ctx.beginPath();
+    ctx.arc(x, y - bodyH - 8, 10, 0, Math.PI * 2);
+    ctx.fill();
+    // hair
+    ctx.fillStyle = "#3a2014";
+    ctx.beginPath();
+    ctx.arc(x, y - bodyH - 12, 10, Math.PI, Math.PI * 2);
+    ctx.fill();
+    // arms (lean)
+    ctx.strokeStyle = "#f3c79b";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x - 12, y - bodyH * 0.7);
+    ctx.lineTo(x - 22 - this.laneAnim * 4, y - bodyH * 0.4);
+    ctx.moveTo(x + 12, y - bodyH * 0.7);
+    ctx.lineTo(x + 22 - this.laneAnim * 4, y - bodyH * 0.4);
+    ctx.stroke();
+
+    // dash trail
+    if (this.dashTimer > 0) {
+      ctx.fillStyle = "rgba(122,219,255,0.4)";
+      for (let i = 1; i <= 4; i++) {
+        ctx.beginPath();
+        ctx.ellipse(x - i * 18, y + 10, 50 - i * 6, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.globalAlpha = 1;
+  }
+}
