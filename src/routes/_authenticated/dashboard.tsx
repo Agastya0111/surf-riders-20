@@ -17,20 +17,26 @@ function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ["profile", user.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("username, avatar_url, coins, gems, highest_score, current_world")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: progress } = usePlayerProgress(user.id);
+  const profile = progress?.profile;
+  const prog = progress?.progress;
+  const isLoading = !progress;
+
+  const level = prog?.level ?? 1;
+  const xp = prog?.xp ?? 0;
+  // remaining xp inside current level
+  let consumed = 0;
+  for (let l = 1; l < level; l++) consumed += xpForLevel(l);
+  const xpIntoLevel = xp - consumed;
+  const xpNeeded = xpForLevel(level);
+  const xpPct = Math.min(100, Math.round((xpIntoLevel / xpNeeded) * 100));
 
   async function handleSignOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
