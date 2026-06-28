@@ -127,9 +127,9 @@ function StatCard({ icon: Icon, label, value, accent, loading }: { icon: React.C
   );
 }
 
-function ModeCard({ icon: Icon, title, desc, cta }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; cta: string }) {
+function ModeCard({ icon: Icon, title, desc, cta, onClick }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; cta: string; onClick?: () => void }) {
   return (
-    <button onClick={() => toast.info(`${title} launches soon.`)} className="group glass flex w-full items-center justify-between rounded-3xl p-5 text-left transition hover:-translate-y-0.5 hover:shadow-glow">
+    <button onClick={onClick ?? (() => toast.info(`${title} launches soon.`))} className="group glass flex w-full items-center justify-between rounded-3xl p-5 text-left transition hover:-translate-y-0.5 hover:shadow-glow">
       <div className="flex min-w-0 items-center gap-4">
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-wave shadow-glow">
           <Icon className="h-6 w-6 text-primary-foreground" />
