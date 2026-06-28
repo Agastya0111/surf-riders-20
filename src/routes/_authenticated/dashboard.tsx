@@ -110,7 +110,11 @@ function Dashboard() {
         {/* Tiles */}
         <section className="mt-6 grid gap-4 sm:grid-cols-3">
           <Tile icon={ShoppingBag} title="Shop" desc="Boards, characters, cosmetics." badge="Soon" />
-          <Tile icon={Trophy} title="Leaderboards" desc="Global, weekly, daily." />
+          <Link to="/leaderboards" className="glass relative rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <Trophy className="h-6 w-6 text-lagoon" />
+            <p className="mt-3 font-display text-base font-extrabold">Leaderboards</p>
+            <p className="mt-1 text-xs text-muted-foreground">Global top riders.</p>
+          </Link>
           <Tile icon={Waves} title="Worlds" desc="Travel the seven seas." />
         </section>
 
