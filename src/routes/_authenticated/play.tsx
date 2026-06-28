@@ -65,7 +65,7 @@ function PlayPage() {
         try {
           const res = await save({ data: { score: r.score, coinsEarned: r.coins, distance: r.distance, bossDefeated: r.bossDefeated } });
           setSaved(res);
-          queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
+          queryClient.invalidateQueries({ queryKey: ["player-progress", user.id] });
         } catch (e) {
           console.error(e);
           toast.error("Could not save run. Progress kept locally.");
