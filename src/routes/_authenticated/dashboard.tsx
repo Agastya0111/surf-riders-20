@@ -92,8 +92,8 @@ function Dashboard() {
 
         {/* Modes */}
         <section className="mt-6 grid gap-4 sm:grid-cols-2">
-          <ModeCard icon={BookOpen} title="Story Mode" desc="Restore the Coral Crown across 5 worlds." cta="Play story" />
-          <ModeCard icon={InfinityIcon} title="Endless Mode" desc="Survive infinite waves. Chase a new high score." cta="Go endless" />
+          <ModeCard icon={BookOpen} title="Story Mode" desc="Restore the Seven Tide Crystals across worlds." cta="Play story" onClick={() => navigate({ to: "/play" })} />
+          <ModeCard icon={InfinityIcon} title="Endless Mode" desc="Survive infinite waves. Chase a new high score." cta="Go endless" onClick={() => navigate({ to: "/play" })} />
         </section>
 
         {/* Tiles */}
