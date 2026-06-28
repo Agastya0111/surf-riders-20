@@ -74,7 +74,7 @@ function Dashboard() {
 
         {/* Continue */}
         <section className="mt-6">
-          <button onClick={() => toast.info("Gameplay launches soon — story mode is being polished.")} className="group flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-wave p-5 text-left shadow-glow transition hover:scale-[1.01]">
+          <button onClick={() => navigate({ to: "/play" })} className="group flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-wave p-5 text-left shadow-glow transition hover:scale-[1.01]">
             <div className="flex items-center gap-4">
               <div className="grid h-14 w-14 place-items-center rounded-2xl bg-background/20 backdrop-blur">
                 <Play className="h-7 w-7 fill-primary-foreground text-primary-foreground" />
@@ -82,7 +82,7 @@ function Dashboard() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-primary-foreground/80">Continue</p>
                 <p className="font-display text-xl font-extrabold text-primary-foreground">
-                  {humanWorld(profile?.current_world ?? "tropical_lagoon")}
+                  Sunny Beach
                 </p>
               </div>
             </div>
