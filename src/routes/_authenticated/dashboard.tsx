@@ -37,11 +37,7 @@ function Dashboard() {
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
-  }
+
 
   const initials = (profile?.username || user.email || "S").slice(0, 2).toUpperCase();
 
