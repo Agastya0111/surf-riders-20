@@ -1,31 +1,35 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coins, Gem, Trophy, Play, Settings, LogOut, ShoppingBag, BookOpen, Infinity as InfinityIcon, Waves, ChevronRight } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Coins, Gem, Trophy, Play, Settings, LogOut, ShoppingBag, BookOpen, Infinity as InfinityIcon, Waves, ChevronRight, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { usePlayerProgress } from "@/hooks/use-player-progress";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Surf Riders 2.0" }] }),
   component: Dashboard,
 });
 
+function xpForLevel(level: number) { return 100 * level; }
+
 function Dashboard() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ["profile", user.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("username, avatar_url, coins, gems, highest_score, current_world")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: progress } = usePlayerProgress(user.id);
+  const profile = progress?.profile;
+  const prog = progress?.progress;
+  const isLoading = !progress;
+
+  const level = prog?.level ?? 1;
+  const xp = prog?.xp ?? 0;
+  // remaining xp inside current level
+  let consumed = 0;
+  for (let l = 1; l < level; l++) consumed += xpForLevel(l);
+  const xpIntoLevel = xp - consumed;
+  const xpNeeded = xpForLevel(level);
+  const xpPct = Math.min(100, Math.round((xpIntoLevel / xpNeeded) * 100));
 
   async function handleSignOut() {
     await queryClient.cancelQueries();
@@ -33,6 +37,7 @@ function Dashboard() {
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }
+
 
   const initials = (profile?.username || user.email || "S").slice(0, 2).toUpperCase();
 
@@ -49,10 +54,16 @@ function Dashboard() {
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-widest text-lagoon">Rider</p>
+              <p className="text-xs uppercase tracking-widest text-lagoon">Rider · Lv {level}</p>
               <h1 className="truncate font-display text-xl font-extrabold sm:text-2xl">
                 {profile?.username ?? "Loading..."}
               </h1>
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-1.5 w-32 overflow-hidden rounded-full bg-secondary/60">
+                  <div className="h-full bg-gradient-wave" style={{ width: `${xpPct}%` }} />
+                </div>
+                <span className="text-[10px] text-muted-foreground"><Zap className="inline h-3 w-3 text-sunset" /> {xpIntoLevel}/{xpNeeded} XP</span>
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -99,7 +110,11 @@ function Dashboard() {
         {/* Tiles */}
         <section className="mt-6 grid gap-4 sm:grid-cols-3">
           <Tile icon={ShoppingBag} title="Shop" desc="Boards, characters, cosmetics." badge="Soon" />
-          <Tile icon={Trophy} title="Leaderboards" desc="Global, weekly, daily." />
+          <Link to="/leaderboards" className="glass relative rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <Trophy className="h-6 w-6 text-lagoon" />
+            <p className="mt-3 font-display text-base font-extrabold">Leaderboards</p>
+            <p className="mt-1 text-xs text-muted-foreground">Global top riders.</p>
+          </Link>
           <Tile icon={Waves} title="Worlds" desc="Travel the seven seas." />
         </section>
 

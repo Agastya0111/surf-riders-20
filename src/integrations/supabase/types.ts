@@ -14,6 +14,99 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          created_at: string
+          description: string
+          icon: string | null
+          key: string
+          metric: string
+          name: string
+          reward_coins: number
+          reward_gems: number
+          threshold: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          icon?: string | null
+          key: string
+          metric?: string
+          name: string
+          reward_coins?: number
+          reward_gems?: number
+          threshold?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          icon?: string | null
+          key?: string
+          metric?: string
+          name?: string
+          reward_coins?: number
+          reward_gems?: number
+          threshold?: number
+        }
+        Relationships: []
+      }
+      inventory: {
+        Row: {
+          created_at: string
+          id: string
+          item_key: string
+          quantity: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_key: string
+          quantity?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_key?: string
+          quantity?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      leaderboards: {
+        Row: {
+          achieved_at: string
+          distance: number
+          id: string
+          score: number
+          user_id: string
+          username: string
+          world: string
+        }
+        Insert: {
+          achieved_at?: string
+          distance?: number
+          id?: string
+          score: number
+          user_id: string
+          username: string
+          world?: string
+        }
+        Update: {
+          achieved_at?: string
+          distance?: number
+          id?: string
+          score?: number
+          user_id?: string
+          username?: string
+          world?: string
+        }
+        Relationships: []
+      }
       owned_characters: {
         Row: {
           acquired_at: string
@@ -59,6 +152,48 @@ export type Database = {
           id?: string
           surfboard_key?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      player_progress: {
+        Row: {
+          best_distance: number
+          bosses_defeated: number
+          created_at: string
+          last_played_at: string | null
+          level: number
+          total_coins_earned: number
+          total_distance: number
+          total_runs: number
+          updated_at: string
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          best_distance?: number
+          bosses_defeated?: number
+          created_at?: string
+          last_played_at?: string | null
+          level?: number
+          total_coins_earned?: number
+          total_distance?: number
+          total_runs?: number
+          updated_at?: string
+          user_id: string
+          xp?: number
+        }
+        Update: {
+          best_distance?: number
+          bosses_defeated?: number
+          created_at?: string
+          last_played_at?: string | null
+          level?: number
+          total_coins_earned?: number
+          total_distance?: number
+          total_runs?: number
+          updated_at?: string
+          user_id?: string
+          xp?: number
         }
         Relationships: []
       }
@@ -127,6 +262,74 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      surfboards: {
+        Row: {
+          boost: number
+          control: number
+          created_at: string
+          description: string | null
+          key: string
+          name: string
+          price_coins: number
+          price_gems: number
+          rarity: string
+          speed: number
+        }
+        Insert: {
+          boost?: number
+          control?: number
+          created_at?: string
+          description?: string | null
+          key: string
+          name: string
+          price_coins?: number
+          price_gems?: number
+          rarity?: string
+          speed?: number
+        }
+        Update: {
+          boost?: number
+          control?: number
+          created_at?: string
+          description?: string | null
+          key?: string
+          name?: string
+          price_coins?: number
+          price_gems?: number
+          rarity?: string
+          speed?: number
+        }
+        Relationships: []
+      }
+      user_achievements: {
+        Row: {
+          achievement_key: string
+          id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          achievement_key: string
+          id?: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          achievement_key?: string
+          id?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_key_fkey"
+            columns: ["achievement_key"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["key"]
+          },
+        ]
       }
     }
     Views: {
