@@ -54,10 +54,16 @@ function Dashboard() {
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-widest text-lagoon">Rider</p>
+              <p className="text-xs uppercase tracking-widest text-lagoon">Rider · Lv {level}</p>
               <h1 className="truncate font-display text-xl font-extrabold sm:text-2xl">
                 {profile?.username ?? "Loading..."}
               </h1>
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-1.5 w-32 overflow-hidden rounded-full bg-secondary/60">
+                  <div className="h-full bg-gradient-wave" style={{ width: `${xpPct}%` }} />
+                </div>
+                <span className="text-[10px] text-muted-foreground"><Zap className="inline h-3 w-3 text-sunset" /> {xpIntoLevel}/{xpNeeded} XP</span>
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
