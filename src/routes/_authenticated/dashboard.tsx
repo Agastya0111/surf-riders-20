@@ -74,7 +74,7 @@ function Dashboard() {
 
         {/* Continue */}
         <section className="mt-6">
-          <button onClick={() => toast.info("Gameplay launches soon — story mode is being polished.")} className="group flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-wave p-5 text-left shadow-glow transition hover:scale-[1.01]">
+          <button onClick={() => navigate({ to: "/play" })} className="group flex w-full items-center justify-between overflow-hidden rounded-3xl bg-gradient-wave p-5 text-left shadow-glow transition hover:scale-[1.01]">
             <div className="flex items-center gap-4">
               <div className="grid h-14 w-14 place-items-center rounded-2xl bg-background/20 backdrop-blur">
                 <Play className="h-7 w-7 fill-primary-foreground text-primary-foreground" />
@@ -82,7 +82,7 @@ function Dashboard() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-primary-foreground/80">Continue</p>
                 <p className="font-display text-xl font-extrabold text-primary-foreground">
-                  {humanWorld(profile?.current_world ?? "tropical_lagoon")}
+                  Sunny Beach
                 </p>
               </div>
             </div>
@@ -92,8 +92,8 @@ function Dashboard() {
 
         {/* Modes */}
         <section className="mt-6 grid gap-4 sm:grid-cols-2">
-          <ModeCard icon={BookOpen} title="Story Mode" desc="Restore the Coral Crown across 5 worlds." cta="Play story" />
-          <ModeCard icon={InfinityIcon} title="Endless Mode" desc="Survive infinite waves. Chase a new high score." cta="Go endless" />
+          <ModeCard icon={BookOpen} title="Story Mode" desc="Restore the Seven Tide Crystals across worlds." cta="Play story" onClick={() => navigate({ to: "/play" })} />
+          <ModeCard icon={InfinityIcon} title="Endless Mode" desc="Survive infinite waves. Chase a new high score." cta="Go endless" onClick={() => navigate({ to: "/play" })} />
         </section>
 
         {/* Tiles */}
@@ -127,9 +127,9 @@ function StatCard({ icon: Icon, label, value, accent, loading }: { icon: React.C
   );
 }
 
-function ModeCard({ icon: Icon, title, desc, cta }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; cta: string }) {
+function ModeCard({ icon: Icon, title, desc, cta, onClick }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string; cta: string; onClick?: () => void }) {
   return (
-    <button onClick={() => toast.info(`${title} launches soon.`)} className="group glass flex w-full items-center justify-between rounded-3xl p-5 text-left transition hover:-translate-y-0.5 hover:shadow-glow">
+    <button onClick={onClick ?? (() => toast.info(`${title} launches soon.`))} className="group glass flex w-full items-center justify-between rounded-3xl p-5 text-left transition hover:-translate-y-0.5 hover:shadow-glow">
       <div className="flex min-w-0 items-center gap-4">
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-wave shadow-glow">
           <Icon className="h-6 w-6 text-primary-foreground" />
