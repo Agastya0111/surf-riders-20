@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedPlayRouteImport } from './routes/_authenticated/play'
+import { Route as AuthenticatedLeaderboardsRouteImport } from './routes/_authenticated/leaderboards'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -52,6 +53,12 @@ const AuthenticatedPlayRoute = AuthenticatedPlayRouteImport.update({
   path: '/play',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLeaderboardsRoute =
+  AuthenticatedLeaderboardsRouteImport.update({
+    id: '/leaderboards',
+    path: '/leaderboards',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/leaderboards': typeof AuthenticatedLeaderboardsRoute
   '/play': typeof AuthenticatedPlayRoute
 }
 export interface FileRoutesByTo {
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/leaderboards': typeof AuthenticatedLeaderboardsRoute
   '/play': typeof AuthenticatedPlayRoute
 }
 export interface FileRoutesById {
@@ -85,6 +94,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/leaderboards': typeof AuthenticatedLeaderboardsRoute
   '/_authenticated/play': typeof AuthenticatedPlayRoute
 }
 export interface FileRouteTypes {
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sitemap.xml'
     | '/dashboard'
+    | '/leaderboards'
     | '/play'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sitemap.xml'
     | '/dashboard'
+    | '/leaderboards'
     | '/play'
   id:
     | '__root__'
@@ -115,6 +127,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sitemap.xml'
     | '/_authenticated/dashboard'
+    | '/_authenticated/leaderboards'
     | '/_authenticated/play'
   fileRoutesById: FileRoutesById
 }
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlayRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/leaderboards': {
+      id: '/_authenticated/leaderboards'
+      path: '/leaderboards'
+      fullPath: '/leaderboards'
+      preLoaderRoute: typeof AuthenticatedLeaderboardsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -190,11 +210,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedLeaderboardsRoute: typeof AuthenticatedLeaderboardsRoute
   AuthenticatedPlayRoute: typeof AuthenticatedPlayRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedLeaderboardsRoute: AuthenticatedLeaderboardsRoute,
   AuthenticatedPlayRoute: AuthenticatedPlayRoute,
 }
 

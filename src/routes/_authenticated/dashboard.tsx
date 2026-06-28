@@ -1,13 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coins, Gem, Trophy, Play, Settings, LogOut, ShoppingBag, BookOpen, Infinity as InfinityIcon, Waves, ChevronRight } from "lucide-react";
+import { Coins, Gem, Trophy, Play, Settings, LogOut, ShoppingBag, BookOpen, Infinity as InfinityIcon, Waves, ChevronRight, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { usePlayerProgress } from "@/hooks/use-player-progress";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Surf Riders 2.0" }] }),
   component: Dashboard,
 });
+
+function xpForLevel(level: number) { return 100 * level; }
 
 function Dashboard() {
   const { user } = Route.useRouteContext();
