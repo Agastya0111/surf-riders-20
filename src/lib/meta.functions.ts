@@ -157,7 +157,7 @@ export const updateSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
     music_enabled: z.boolean().optional(),
-    sfx_enabled: z.boolean().optional(),
+    sound_enabled: z.boolean().optional(),
     music_volume: z.number().min(0).max(1).optional(),
     sfx_volume: z.number().min(0).max(1).optional(),
     vibration_enabled: z.boolean().optional(),
@@ -165,9 +165,11 @@ export const updateSettings = createServerFn({ method: "POST" })
     graphics_quality: z.enum(["low", "medium", "high"]).optional(),
     touch_sensitivity: z.number().min(0.3).max(2.5).optional(),
     color_blind_mode: z.enum(["off", "protanopia", "deuteranopia", "tritanopia"]).optional(),
-    reduced_motion: z.boolean().optional(),
+    reduce_motion: z.boolean().optional(),
     high_contrast: z.boolean().optional(),
+    large_text: z.boolean().optional(),
   }).parse(d))
+
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { error } = await supabase.from("player_settings")
