@@ -27,7 +27,9 @@ function PlayPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = Route.useRouteContext();
+  const { world } = Route.useSearch();
   const save = useServerFn(saveGameRun);
+
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<SurfGame | null>(null);
