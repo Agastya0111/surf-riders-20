@@ -2,13 +2,29 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const SaveSchema = z.object({
-  score: z.number().int().min(0).max(10_000_000),
-  coinsEarned: z.number().int().min(0).max(1_000_000),
-  distance: z.number().int().min(0).max(10_000_000),
-  world: z.string().max(64).optional().default("tropical_lagoon"),
-  bossDefeated: z.boolean().optional().default(false),
-});
+const SaveSchema = z
+  .object({
+    score: z.number().int().min(0).max(500_000),
+    coinsEarned: z.number().int().min(0).max(10_000),
+    distance: z.number().int().min(0).max(100_000),
+    world: z.string().max(64).optional().default("tropical_lagoon"),
+    bossDefeated: z.boolean().optional().default(false),
+  })
+  .superRefine((d, ctx) => {
+    // Plausibility checks: client-reported metrics must be consistent with distance.
+    // Engine produces ~score ≤ speed*time*mult + coin bonuses; coins ≤ ~distance/2.
+    const maxScore = d.distance * 50 + (d.bossDefeated ? 5_000 : 0) + 2_000;
+    const maxCoins = Math.ceil(d.distance / 2) + 50;
+    if (d.score > maxScore) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Score implausible for distance" });
+    }
+    if (d.coinsEarned > maxCoins) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Coins implausible for distance" });
+    }
+    if (d.bossDefeated && d.distance < 600) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Boss cannot be defeated before reaching it" });
+    }
+  });
 
 // XP curve: 100 * level
 function xpForLevel(level: number) {
