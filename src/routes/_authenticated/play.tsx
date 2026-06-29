@@ -6,13 +6,17 @@ import {
   Pause, Play, RotateCcw, Home, Coins, Trophy, Zap, Heart, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Sparkles,
 } from "lucide-react";
 import { SurfGame, type GameState } from "@/game/engine";
+import { FALLBACK_THEMES } from "@/game/themes";
+
 import { saveGameRun } from "@/lib/game-progress.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/play")({
-  head: () => ({ meta: [{ title: "Sunny Beach — Surf Riders 2.0" }] }),
+  head: () => ({ meta: [{ title: "Surf Riders 2.0" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({ world: typeof s.world === "string" ? s.world : "sunny_beach" }),
   component: PlayPage,
 });
+
 
 const CUTSCENE = [
   "Long ago, the Seven Tide Crystals kept the oceans calm…",
@@ -25,7 +29,9 @@ function PlayPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = Route.useRouteContext();
+  const { world } = Route.useSearch();
   const save = useServerFn(saveGameRun);
+
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<SurfGame | null>(null);
@@ -58,12 +64,13 @@ function PlayPage() {
   // Initialize game once canvas is mounted
   useEffect(() => {
     if (phase !== "playing" || !canvasRef.current) return;
+    const theme = FALLBACK_THEMES[world] ?? FALLBACK_THEMES.sunny_beach;
     const game = new SurfGame(canvasRef.current, {
       onStateChange: (s) => setState(s),
       onGameOver: async (r) => {
         setSaving(true);
         try {
-          const res = await save({ data: { score: r.score, coinsEarned: r.coins, distance: r.distance, bossDefeated: r.bossDefeated } });
+          const res = await save({ data: { score: r.score, coinsEarned: r.coins, distance: r.distance, bossDefeated: r.bossDefeated, world } });
           setSaved(res);
           queryClient.invalidateQueries({ queryKey: ["player-progress", user.id] });
         } catch (e) {
@@ -73,12 +80,13 @@ function PlayPage() {
           setSaving(false);
         }
       },
-    });
+    }, { theme });
     gameRef.current = game;
     game.start();
     setState({ ...game.state });
     return () => game.destroy();
-  }, [phase, save, queryClient, user.id]);
+  }, [phase, save, queryClient, user.id, world]);
+
 
   const onPause = () => gameRef.current?.pause();
   const onResume = () => gameRef.current?.resume();
@@ -247,7 +255,7 @@ function Hud({ state, onPause }: { state: GameState; onPause: () => void }) {
           <div className="w-full rounded-full bg-background/70 p-2 backdrop-blur">
             <p className="mb-1 text-center text-xs font-bold uppercase tracking-widest text-coral">Giant Crab</p>
             <div className="h-2 overflow-hidden rounded-full bg-background">
-              <div className="h-full bg-gradient-sunset transition-all" style={{ width: `${(state.bossHealth / 6) * 100}%` }} />
+              <div className="h-full bg-gradient-sunset transition-all" style={{ width: `${Math.min(100, (state.bossHealth / Math.max(1, state.bossHealth + 1)) * 100)}%` }} />
             </div>
             <p className="mt-1 text-center text-[10px] text-muted-foreground">Dash into it!</p>
           </div>

@@ -1,5 +1,9 @@
-// Surf Riders 2.0 — Sunny Beach endless runner engine (Canvas 2D)
+// Surf Riders 2.0 — endless runner engine (Canvas 2D)
+// Themed per-world: palette, boss, weather and day/night.
 // Self-contained, mobile-first, 3-lane runner.
+
+import { DEFAULT_THEME, type WorldTheme } from "./themes";
+
 
 export type GameStatus = "intro" | "playing" | "paused" | "gameover";
 
@@ -21,6 +25,13 @@ export type GameCallbacks = {
   onStateChange: (s: GameState) => void;
   onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
 };
+
+export type GameOptions = {
+  theme?: WorldTheme;
+  touchSensitivity?: number; // 0.5..2 (default 1)
+  reduceMotion?: boolean;
+};
+
 
 type Lane = -1 | 0 | 1;
 
@@ -50,11 +61,17 @@ export class SurfGame {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private cb: GameCallbacks;
+  private theme: WorldTheme;
+  private touchSens: number;
+  private reduceMotion: boolean;
   private raf = 0;
   private last = 0;
   private dpr = 1;
   private w = 0;
   private h = 0;
+  private flashT = 0; // storm flash
+  private weatherPhase = 0;
+
 
   // player
   private lane: Lane = 0;
@@ -106,15 +123,27 @@ export class SurfGame {
     bossDefeated: false,
   };
 
-  constructor(canvas: HTMLCanvasElement, cb: GameCallbacks) {
+  constructor(canvas: HTMLCanvasElement, cb: GameCallbacks, opts: GameOptions = {}) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas 2D unavailable");
     this.ctx = ctx;
     this.cb = cb;
+    this.theme = opts.theme ?? DEFAULT_THEME;
+    this.touchSens = opts.touchSensitivity ?? 1;
+    this.reduceMotion = opts.reduceMotion ?? false;
+    this.state.bossHealth = this.theme.bossHp;
     this.resize();
     this.bindInput();
   }
+
+  setTheme(theme: WorldTheme) {
+    this.theme = theme;
+    this.state.bossHealth = theme.bossHp;
+  }
+  setSensitivity(v: number) { this.touchSens = Math.max(0.3, Math.min(2.5, v)); }
+  setReduceMotion(v: boolean) { this.reduceMotion = v; }
+
 
   start() {
     this.state.status = "playing";
@@ -222,7 +251,9 @@ export class SurfGame {
     const dy = t.clientY - this.touchStart.y;
     const adx = Math.abs(dx), ady = Math.abs(dy);
     const dt = performance.now() - this.touchStart.t;
-    if (adx < 24 && ady < 24 && dt < 250) {
+    const tapThresh = 24 / this.touchSens;
+    if (adx < tapThresh && ady < tapThresh && dt < 250) {
+
       // tap or double-tap
       const now = performance.now();
       if (now - this.lastTap < 280) { this.doDash(); this.lastTap = 0; }
@@ -325,6 +356,12 @@ export class SurfGame {
     this.laneAnim += (this.lane - this.laneAnim) * Math.min(1, dt * 12);
     this.waveOffset = (this.waveOffset + dt * 40) % 200;
     this.cloudOffset = (this.cloudOffset + dt * 8) % this.w;
+    this.weatherPhase += dt;
+    if (this.theme.weather === "storm") {
+      if (this.flashT > 0) this.flashT -= dt * 2;
+      else if (Math.random() < dt * 0.25) this.flashT = 1;
+    }
+
 
     // distance / score
     this.distFloat += this.speed * dt;
@@ -362,7 +399,7 @@ export class SurfGame {
     if (!this.bossSpawned && this.distFloat >= 600) {
       this.bossSpawned = true;
       this.state.bossActive = true;
-      this.state.bossHealth = 6;
+      this.state.bossHealth = this.theme.bossHp;
       this.bossHits = 0;
       this.bossZ = 24;
       this.bossLane = 0;
@@ -371,6 +408,7 @@ export class SurfGame {
       this.targetSpeed = 12;
       this.emit();
     }
+
 
     // boss behavior
     if (this.state.bossActive) {
@@ -391,21 +429,22 @@ export class SurfGame {
       // collide with boss to damage when dashing
       if (this.dashTimer > 0 && this.bossZ < 4 && this.bossLane === this.lane) {
         this.bossHits++;
-        this.state.bossHealth = Math.max(0, 6 - this.bossHits);
+        this.state.bossHealth = Math.max(0, this.theme.bossHp - this.bossHits);
         this.bossZ = 18;
-        this.burst(this.w / 2, this.h * 0.55, "#ff7a59");
+        this.burst(this.w / 2, this.h * 0.55, this.theme.accent);
         this.emit();
-        if (this.bossHits >= 6) {
+        if (this.bossHits >= this.theme.bossHp) {
           this.state.bossActive = false;
           this.state.bossDefeated = true;
           this.scoreFloat += 500;
           this.targetSpeed = 16;
-          this.bossSpawned = false; // allow another boss later (endless)
+          this.bossSpawned = false;
           this.distFloat += 200;
           this.burst(this.w / 2, this.h * 0.55, "#ffd166");
           this.emit();
         }
       }
+
     }
 
     // collisions
@@ -544,30 +583,33 @@ export class SurfGame {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
-    // sky gradient
+    // sky gradient (themed)
     const sky = ctx.createLinearGradient(0, 0, 0, this.h * HORIZON_Y_RATIO);
-    sky.addColorStop(0, "#ffd9a8");
-    sky.addColorStop(0.5, "#ffb27a");
-    sky.addColorStop(1, "#7ed1e6");
+    sky.addColorStop(0, this.theme.sky[0]);
+    sky.addColorStop(1, this.theme.sky[1]);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, this.w, this.h * HORIZON_Y_RATIO);
 
-    // sun
-    ctx.fillStyle = "rgba(255,230,160,0.9)";
+    // sun / moon depending on daytime
+    const isNight = this.theme.daytime === "night" || this.theme.daytime === "twilight";
+    ctx.fillStyle = isNight ? "rgba(220,230,255,0.85)" : "rgba(255,230,160,0.9)";
     ctx.beginPath();
     ctx.arc(this.w * 0.7, this.h * 0.22, this.h * 0.06, 0, Math.PI * 2);
     ctx.fill();
 
-    // clouds
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    for (let i = 0; i < 4; i++) {
-      const cx = ((i * 240) - this.cloudOffset + this.w) % (this.w + 240) - 120;
-      const cy = this.h * (0.12 + (i % 2) * 0.06);
-      this.cloud(cx, cy, 40 + (i % 2) * 20);
+    // clouds (skip in storm/fog heavily)
+    if (this.theme.weather !== "fog") {
+      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      for (let i = 0; i < 4; i++) {
+        const cx = ((i * 240) - this.cloudOffset + this.w) % (this.w + 240) - 120;
+        const cy = this.h * (0.12 + (i % 2) * 0.06);
+        this.cloud(cx, cy, 40 + (i % 2) * 20);
+      }
     }
 
-    // distant mountains
-    ctx.fillStyle = "#5a8fa6";
+    // distant mountains tinted to water palette
+    ctx.fillStyle = this.theme.water[1];
+    ctx.globalAlpha = 0.6;
     ctx.beginPath();
     ctx.moveTo(0, this.h * HORIZON_Y_RATIO);
     for (let x = 0; x <= this.w; x += 40) {
@@ -577,15 +619,15 @@ export class SurfGame {
     ctx.lineTo(this.w, this.h * HORIZON_Y_RATIO);
     ctx.closePath();
     ctx.fill();
+    ctx.globalAlpha = 1;
 
-    // ocean (left) + beach (right) — actually surf on the water; the road is water
-    // Ground gradient (water)
+    // water (themed)
     const water = ctx.createLinearGradient(0, this.h * HORIZON_Y_RATIO, 0, this.h);
-    water.addColorStop(0, "#3aa6c8");
-    water.addColorStop(0.5, "#1f6f99");
-    water.addColorStop(1, "#0f3a5e");
+    water.addColorStop(0, this.theme.water[0]);
+    water.addColorStop(1, this.theme.water[1]);
     ctx.fillStyle = water;
     ctx.fillRect(0, this.h * HORIZON_Y_RATIO, this.w, this.h - this.h * HORIZON_Y_RATIO);
+
 
     // wave lines (perspective)
     ctx.strokeStyle = "rgba(255,255,255,0.25)";
@@ -654,13 +696,82 @@ export class SurfGame {
     }
     ctx.globalAlpha = 1;
 
-    // foreground vignette
+    // weather overlay
+    this.drawWeather();
+
+    // day/night tint
+    if (this.theme.daytime === "night") {
+      ctx.fillStyle = "rgba(10,20,60,0.28)";
+      ctx.fillRect(0, 0, this.w, this.h);
+    } else if (this.theme.daytime === "dusk") {
+      ctx.fillStyle = "rgba(120,40,80,0.16)";
+      ctx.fillRect(0, 0, this.w, this.h);
+    } else if (this.theme.daytime === "twilight") {
+      ctx.fillStyle = "rgba(60,30,120,0.22)";
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+
+    // vignette
     const vg = ctx.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.3, this.w / 2, this.h / 2, this.h * 0.7);
     vg.addColorStop(0, "rgba(0,0,0,0)");
     vg.addColorStop(1, "rgba(0,20,40,0.45)");
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, this.w, this.h);
   }
+
+  private drawWeather() {
+    const ctx = this.ctx;
+    const w = this.theme.weather;
+    if (w === "clear") return;
+    if (w === "fog") {
+      ctx.fillStyle = "rgba(200,210,225,0.22)";
+      ctx.fillRect(0, 0, this.w, this.h);
+      return;
+    }
+    if (w === "ash") {
+      ctx.fillStyle = "rgba(60,30,15,0.25)";
+      ctx.fillRect(0, 0, this.w, this.h);
+      const n = this.reduceMotion ? 20 : 60;
+      ctx.fillStyle = "rgba(40,20,10,0.6)";
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 53 + this.weatherPhase * 20) % this.w);
+        const y = ((i * 91 + this.weatherPhase * 60) % this.h);
+        ctx.fillRect(x, y, 2, 2);
+      }
+      return;
+    }
+    if (w === "snow") {
+      const n = this.reduceMotion ? 30 : 90;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 47 + this.weatherPhase * 14) % this.w);
+        const y = ((i * 73 + this.weatherPhase * 90) % this.h);
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5 + (i % 3) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+    if (w === "storm") {
+      // rain
+      ctx.strokeStyle = "rgba(180,210,240,0.4)";
+      ctx.lineWidth = 1;
+      const n = this.reduceMotion ? 30 : 80;
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 31 + this.weatherPhase * 60) % this.w);
+        const y = ((i * 67 + this.weatherPhase * 220) % this.h);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 4, y + 10);
+        ctx.stroke();
+      }
+      if (this.flashT > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${this.flashT * 0.35})`;
+        ctx.fillRect(0, 0, this.w, this.h);
+      }
+    }
+  }
+
 
   private cloud(x: number, y: number, r: number) {
     const ctx = this.ctx;

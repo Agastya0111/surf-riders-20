@@ -67,12 +67,13 @@ function Dashboard() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button onClick={() => toast.info("Settings coming soon")} className="grid h-11 w-11 place-items-center rounded-full glass transition hover:scale-105" aria-label="Settings">
+            <Link to="/settings" className="grid h-11 w-11 place-items-center rounded-full glass transition hover:scale-105" aria-label="Settings">
               <Settings className="h-5 w-5" />
-            </button>
+            </Link>
             <button onClick={handleSignOut} className="grid h-11 w-11 place-items-center rounded-full glass transition hover:scale-105" aria-label="Sign out">
               <LogOut className="h-5 w-5" />
             </button>
+
           </div>
         </header>
 
@@ -109,14 +110,40 @@ function Dashboard() {
 
         {/* Tiles */}
         <section className="mt-6 grid gap-4 sm:grid-cols-3">
-          <Tile icon={ShoppingBag} title="Shop" desc="Boards, characters, cosmetics." badge="Soon" />
+          <Link to="/shop" className="glass relative rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <ShoppingBag className="h-6 w-6 text-sunset" />
+            <p className="mt-3 font-display text-base font-extrabold">Shop</p>
+            <p className="mt-1 text-xs text-muted-foreground">Boards, characters, cosmetics.</p>
+          </Link>
           <Link to="/leaderboards" className="glass relative rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
             <Trophy className="h-6 w-6 text-lagoon" />
             <p className="mt-3 font-display text-base font-extrabold">Leaderboards</p>
             <p className="mt-1 text-xs text-muted-foreground">Global top riders.</p>
           </Link>
-          <Tile icon={Waves} title="Worlds" desc="Travel the seven seas." />
+          <Link to="/worlds" className="glass relative rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <Waves className="h-6 w-6 text-lagoon" />
+            <p className="mt-3 font-display text-base font-extrabold">Worlds</p>
+            <p className="mt-1 text-xs text-muted-foreground">Travel the seven seas.</p>
+          </Link>
         </section>
+        <section className="mt-4 grid gap-4 sm:grid-cols-3">
+          <Link to="/skills" className="glass rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <Zap className="h-6 w-6 text-coral" />
+            <p className="mt-3 font-display text-base font-extrabold">Skill Tree</p>
+            <p className="mt-1 text-xs text-muted-foreground">Movement · Treasure · Combat.</p>
+          </Link>
+          <Link to="/daily" className="glass rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <Trophy className="h-6 w-6 text-sunset" />
+            <p className="mt-3 font-display text-base font-extrabold">Daily Rewards</p>
+            <p className="mt-1 text-xs text-muted-foreground">Streak bonuses every day.</p>
+          </Link>
+          <Link to="/achievements" className="glass rounded-2xl p-5 text-left transition hover:-translate-y-0.5">
+            <Trophy className="h-6 w-6 text-lagoon" />
+            <p className="mt-3 font-display text-base font-extrabold">Achievements</p>
+            <p className="mt-1 text-xs text-muted-foreground">Earn coins & gems.</p>
+          </Link>
+        </section>
+
 
         <p className="mt-10 text-center text-xs text-muted-foreground">
           Signed in as {user.email} •{" "}
