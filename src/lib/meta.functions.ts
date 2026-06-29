@@ -94,9 +94,10 @@ export const unlockSkill = createServerFn({ method: "POST" })
     const { data: prog } = await supabase.from("player_progress")
       .select("skill_points").eq("user_id", userId).maybeSingle();
     const points = prog?.skill_points ?? 0;
-    if (points < skill.cost) throw new Error("Not enough skill points");
-    await supabase.from("player_progress").update({ skill_points: points - skill.cost }).eq("user_id", userId);
+    if (points < skill.cost_points) throw new Error("Not enough skill points");
+    await supabase.from("player_progress").update({ skill_points: points - skill.cost_points }).eq("user_id", userId);
     await supabase.from("user_skills").insert({ user_id: userId, skill_key: data.skillKey });
+
     return { ok: true };
   });
 
