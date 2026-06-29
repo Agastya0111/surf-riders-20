@@ -48,11 +48,12 @@ function ShopPage() {
           price_coins: b.price_coins, price_gems: b.price_gems ?? 0,
           rarity: b.rarity ?? "common", owned: ownedBoardKeys.has(b.key), kind: "surfboard" as const,
         }))
-      : (data?.items ?? []).filter((i) => i.kind === tab).map((i) => ({
+      : (data?.items ?? []).filter((i) => i.category === tab).map((i) => ({
           key: i.key, name: i.name, description: i.description ?? "",
           price_coins: i.price_coins ?? 0, price_gems: i.price_gems ?? 0,
           rarity: i.rarity ?? "common", owned: ownedItemKeys.has(i.key), kind: "item" as const,
         }));
+
 
   return (
     <div className="relative min-h-screen">
