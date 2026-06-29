@@ -690,13 +690,82 @@ export class SurfGame {
     }
     ctx.globalAlpha = 1;
 
-    // foreground vignette
+    // weather overlay
+    this.drawWeather();
+
+    // day/night tint
+    if (this.theme.daytime === "night") {
+      ctx.fillStyle = "rgba(10,20,60,0.28)";
+      ctx.fillRect(0, 0, this.w, this.h);
+    } else if (this.theme.daytime === "dusk") {
+      ctx.fillStyle = "rgba(120,40,80,0.16)";
+      ctx.fillRect(0, 0, this.w, this.h);
+    } else if (this.theme.daytime === "twilight") {
+      ctx.fillStyle = "rgba(60,30,120,0.22)";
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+
+    // vignette
     const vg = ctx.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.3, this.w / 2, this.h / 2, this.h * 0.7);
     vg.addColorStop(0, "rgba(0,0,0,0)");
     vg.addColorStop(1, "rgba(0,20,40,0.45)");
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, this.w, this.h);
   }
+
+  private drawWeather() {
+    const ctx = this.ctx;
+    const w = this.theme.weather;
+    if (w === "clear") return;
+    if (w === "fog") {
+      ctx.fillStyle = "rgba(200,210,225,0.22)";
+      ctx.fillRect(0, 0, this.w, this.h);
+      return;
+    }
+    if (w === "ash") {
+      ctx.fillStyle = "rgba(60,30,15,0.25)";
+      ctx.fillRect(0, 0, this.w, this.h);
+      const n = this.reduceMotion ? 20 : 60;
+      ctx.fillStyle = "rgba(40,20,10,0.6)";
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 53 + this.weatherPhase * 20) % this.w);
+        const y = ((i * 91 + this.weatherPhase * 60) % this.h);
+        ctx.fillRect(x, y, 2, 2);
+      }
+      return;
+    }
+    if (w === "snow") {
+      const n = this.reduceMotion ? 30 : 90;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 47 + this.weatherPhase * 14) % this.w);
+        const y = ((i * 73 + this.weatherPhase * 90) % this.h);
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5 + (i % 3) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+    if (w === "storm") {
+      // rain
+      ctx.strokeStyle = "rgba(180,210,240,0.4)";
+      ctx.lineWidth = 1;
+      const n = this.reduceMotion ? 30 : 80;
+      for (let i = 0; i < n; i++) {
+        const x = ((i * 31 + this.weatherPhase * 60) % this.w);
+        const y = ((i * 67 + this.weatherPhase * 220) % this.h);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 4, y + 10);
+        ctx.stroke();
+      }
+      if (this.flashT > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${this.flashT * 0.35})`;
+        ctx.fillRect(0, 0, this.w, this.h);
+      }
+    }
+  }
+
 
   private cloud(x: number, y: number, r: number) {
     const ctx = this.ctx;
