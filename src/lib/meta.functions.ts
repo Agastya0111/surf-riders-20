@@ -125,8 +125,9 @@ export const claimDailyReward = createServerFn({ method: "POST" })
       current_streak: streak, last_daily_claim: today,
     }).eq("user_id", userId);
     await supabase.from("daily_reward_claims").insert({
-      user_id: userId, claimed_on: today, day, coins: coinsReward, gems: gemsReward,
+      user_id: userId, claim_date: today, day_index: day, reward: { coins: coinsReward, gems: gemsReward },
     });
+
     return { day, streak, coins: coinsReward, gems: gemsReward };
   });
 
