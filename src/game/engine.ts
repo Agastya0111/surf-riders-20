@@ -123,15 +123,27 @@ export class SurfGame {
     bossDefeated: false,
   };
 
-  constructor(canvas: HTMLCanvasElement, cb: GameCallbacks) {
+  constructor(canvas: HTMLCanvasElement, cb: GameCallbacks, opts: GameOptions = {}) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas 2D unavailable");
     this.ctx = ctx;
     this.cb = cb;
+    this.theme = opts.theme ?? DEFAULT_THEME;
+    this.touchSens = opts.touchSensitivity ?? 1;
+    this.reduceMotion = opts.reduceMotion ?? false;
+    this.state.bossHealth = this.theme.bossHp;
     this.resize();
     this.bindInput();
   }
+
+  setTheme(theme: WorldTheme) {
+    this.theme = theme;
+    this.state.bossHealth = theme.bossHp;
+  }
+  setSensitivity(v: number) { this.touchSens = Math.max(0.3, Math.min(2.5, v)); }
+  setReduceMotion(v: boolean) { this.reduceMotion = v; }
+
 
   start() {
     this.state.status = "playing";
