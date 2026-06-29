@@ -1,5 +1,9 @@
-// Surf Riders 2.0 — Sunny Beach endless runner engine (Canvas 2D)
+// Surf Riders 2.0 — endless runner engine (Canvas 2D)
+// Themed per-world: palette, boss, weather and day/night.
 // Self-contained, mobile-first, 3-lane runner.
+
+import { DEFAULT_THEME, type WorldTheme } from "./themes";
+
 
 export type GameStatus = "intro" | "playing" | "paused" | "gameover";
 
