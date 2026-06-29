@@ -577,30 +577,33 @@ export class SurfGame {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
-    // sky gradient
+    // sky gradient (themed)
     const sky = ctx.createLinearGradient(0, 0, 0, this.h * HORIZON_Y_RATIO);
-    sky.addColorStop(0, "#ffd9a8");
-    sky.addColorStop(0.5, "#ffb27a");
-    sky.addColorStop(1, "#7ed1e6");
+    sky.addColorStop(0, this.theme.sky[0]);
+    sky.addColorStop(1, this.theme.sky[1]);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, this.w, this.h * HORIZON_Y_RATIO);
 
-    // sun
-    ctx.fillStyle = "rgba(255,230,160,0.9)";
+    // sun / moon depending on daytime
+    const isNight = this.theme.daytime === "night" || this.theme.daytime === "twilight";
+    ctx.fillStyle = isNight ? "rgba(220,230,255,0.85)" : "rgba(255,230,160,0.9)";
     ctx.beginPath();
     ctx.arc(this.w * 0.7, this.h * 0.22, this.h * 0.06, 0, Math.PI * 2);
     ctx.fill();
 
-    // clouds
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    for (let i = 0; i < 4; i++) {
-      const cx = ((i * 240) - this.cloudOffset + this.w) % (this.w + 240) - 120;
-      const cy = this.h * (0.12 + (i % 2) * 0.06);
-      this.cloud(cx, cy, 40 + (i % 2) * 20);
+    // clouds (skip in storm/fog heavily)
+    if (this.theme.weather !== "fog") {
+      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      for (let i = 0; i < 4; i++) {
+        const cx = ((i * 240) - this.cloudOffset + this.w) % (this.w + 240) - 120;
+        const cy = this.h * (0.12 + (i % 2) * 0.06);
+        this.cloud(cx, cy, 40 + (i % 2) * 20);
+      }
     }
 
-    // distant mountains
-    ctx.fillStyle = "#5a8fa6";
+    // distant mountains tinted to water palette
+    ctx.fillStyle = this.theme.water[1];
+    ctx.globalAlpha = 0.6;
     ctx.beginPath();
     ctx.moveTo(0, this.h * HORIZON_Y_RATIO);
     for (let x = 0; x <= this.w; x += 40) {
@@ -610,15 +613,15 @@ export class SurfGame {
     ctx.lineTo(this.w, this.h * HORIZON_Y_RATIO);
     ctx.closePath();
     ctx.fill();
+    ctx.globalAlpha = 1;
 
-    // ocean (left) + beach (right) — actually surf on the water; the road is water
-    // Ground gradient (water)
+    // water (themed)
     const water = ctx.createLinearGradient(0, this.h * HORIZON_Y_RATIO, 0, this.h);
-    water.addColorStop(0, "#3aa6c8");
-    water.addColorStop(0.5, "#1f6f99");
-    water.addColorStop(1, "#0f3a5e");
+    water.addColorStop(0, this.theme.water[0]);
+    water.addColorStop(1, this.theme.water[1]);
     ctx.fillStyle = water;
     ctx.fillRect(0, this.h * HORIZON_Y_RATIO, this.w, this.h - this.h * HORIZON_Y_RATIO);
+
 
     // wave lines (perspective)
     ctx.strokeStyle = "rgba(255,255,255,0.25)";
