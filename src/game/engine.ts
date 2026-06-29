@@ -251,7 +251,9 @@ export class SurfGame {
     const dy = t.clientY - this.touchStart.y;
     const adx = Math.abs(dx), ady = Math.abs(dy);
     const dt = performance.now() - this.touchStart.t;
-    if (adx < 24 && ady < 24 && dt < 250) {
+    const tapThresh = 24 / this.touchSens;
+    if (adx < tapThresh && ady < tapThresh && dt < 250) {
+
       // tap or double-tap
       const now = performance.now();
       if (now - this.lastTap < 280) { this.doDash(); this.lastTap = 0; }
