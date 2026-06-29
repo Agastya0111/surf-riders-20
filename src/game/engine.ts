@@ -26,6 +26,13 @@ export type GameCallbacks = {
   onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
 };
 
+export type GameOptions = {
+  theme?: WorldTheme;
+  touchSensitivity?: number; // 0.5..2 (default 1)
+  reduceMotion?: boolean;
+};
+
+
 type Lane = -1 | 0 | 1;
 
 type Obstacle = {
