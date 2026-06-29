@@ -356,6 +356,12 @@ export class SurfGame {
     this.laneAnim += (this.lane - this.laneAnim) * Math.min(1, dt * 12);
     this.waveOffset = (this.waveOffset + dt * 40) % 200;
     this.cloudOffset = (this.cloudOffset + dt * 8) % this.w;
+    this.weatherPhase += dt;
+    if (this.theme.weather === "storm") {
+      if (this.flashT > 0) this.flashT -= dt * 2;
+      else if (Math.random() < dt * 0.25) this.flashT = 1;
+    }
+
 
     // distance / score
     this.distFloat += this.speed * dt;
