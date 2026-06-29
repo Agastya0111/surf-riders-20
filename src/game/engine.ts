@@ -61,11 +61,17 @@ export class SurfGame {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private cb: GameCallbacks;
+  private theme: WorldTheme;
+  private touchSens: number;
+  private reduceMotion: boolean;
   private raf = 0;
   private last = 0;
   private dpr = 1;
   private w = 0;
   private h = 0;
+  private flashT = 0; // storm flash
+  private weatherPhase = 0;
+
 
   // player
   private lane: Lane = 0;
