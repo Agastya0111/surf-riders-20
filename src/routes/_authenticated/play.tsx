@@ -255,7 +255,7 @@ function Hud({ state, onPause }: { state: GameState; onPause: () => void }) {
           <div className="w-full rounded-full bg-background/70 p-2 backdrop-blur">
             <p className="mb-1 text-center text-xs font-bold uppercase tracking-widest text-coral">Giant Crab</p>
             <div className="h-2 overflow-hidden rounded-full bg-background">
-              <div className="h-full bg-gradient-sunset transition-all" style={{ width: `${(state.bossHealth / 6) * 100}%` }} />
+              <div className="h-full bg-gradient-sunset transition-all" style={{ width: `${(state.bossHealth / Math.max(1, (FALLBACK_THEMES[world]?.bossHp ?? 6))) * 100}%` }} />
             </div>
             <p className="mt-1 text-center text-[10px] text-muted-foreground">Dash into it!</p>
           </div>
