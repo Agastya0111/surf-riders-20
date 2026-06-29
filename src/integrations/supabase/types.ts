@@ -50,6 +50,30 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_reward_claims: {
+        Row: {
+          claim_date: string
+          claimed_at: string
+          day_index: number
+          reward: Json
+          user_id: string
+        }
+        Insert: {
+          claim_date: string
+          claimed_at?: string
+          day_index: number
+          reward?: Json
+          user_id: string
+        }
+        Update: {
+          claim_date?: string
+          claimed_at?: string
+          day_index?: number
+          reward?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       inventory: {
         Row: {
           created_at: string
@@ -131,6 +155,41 @@ export type Database = {
         }
         Relationships: []
       }
+      owned_items: {
+        Row: {
+          acquired_at: string
+          equipped: boolean
+          id: string
+          item_key: string
+          level: number
+          user_id: string
+        }
+        Insert: {
+          acquired_at?: string
+          equipped?: boolean
+          id?: string
+          item_key: string
+          level?: number
+          user_id: string
+        }
+        Update: {
+          acquired_at?: string
+          equipped?: boolean
+          id?: string
+          item_key?: string
+          level?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owned_items_item_key_fkey"
+            columns: ["item_key"]
+            isOneToOne: false
+            referencedRelation: "shop_items"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       owned_surfboards: {
         Row: {
           acquired_at: string
@@ -160,8 +219,11 @@ export type Database = {
           best_distance: number
           bosses_defeated: number
           created_at: string
+          current_streak: number
+          last_daily_claim: string | null
           last_played_at: string | null
           level: number
+          skill_points: number
           total_coins_earned: number
           total_distance: number
           total_runs: number
@@ -173,8 +235,11 @@ export type Database = {
           best_distance?: number
           bosses_defeated?: number
           created_at?: string
+          current_streak?: number
+          last_daily_claim?: string | null
           last_played_at?: string | null
           level?: number
+          skill_points?: number
           total_coins_earned?: number
           total_distance?: number
           total_runs?: number
@@ -186,8 +251,11 @@ export type Database = {
           best_distance?: number
           bosses_defeated?: number
           created_at?: string
+          current_streak?: number
+          last_daily_claim?: string | null
           last_played_at?: string | null
           level?: number
+          skill_points?: number
           total_coins_earned?: number
           total_distance?: number
           total_runs?: number
@@ -199,28 +267,49 @@ export type Database = {
       }
       player_settings: {
         Row: {
+          color_blind_mode: string
           graphics_quality: string
+          high_contrast: boolean
+          large_text: boolean
           music_enabled: boolean
+          music_volume: number
           notifications_enabled: boolean
+          reduce_motion: boolean
+          sfx_volume: number
           sound_enabled: boolean
+          touch_sensitivity: number
           updated_at: string
           user_id: string
           vibration_enabled: boolean
         }
         Insert: {
+          color_blind_mode?: string
           graphics_quality?: string
+          high_contrast?: boolean
+          large_text?: boolean
           music_enabled?: boolean
+          music_volume?: number
           notifications_enabled?: boolean
+          reduce_motion?: boolean
+          sfx_volume?: number
           sound_enabled?: boolean
+          touch_sensitivity?: number
           updated_at?: string
           user_id: string
           vibration_enabled?: boolean
         }
         Update: {
+          color_blind_mode?: string
           graphics_quality?: string
+          high_contrast?: boolean
+          large_text?: boolean
           music_enabled?: boolean
+          music_volume?: number
           notifications_enabled?: boolean
+          reduce_motion?: boolean
+          sfx_volume?: number
           sound_enabled?: boolean
+          touch_sensitivity?: number
           updated_at?: string
           user_id?: string
           vibration_enabled?: boolean
@@ -262,6 +351,89 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      shop_items: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          effect: Json
+          icon: string | null
+          key: string
+          name: string
+          price_coins: number
+          price_gems: number
+          rarity: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          description?: string | null
+          effect?: Json
+          icon?: string | null
+          key: string
+          name: string
+          price_coins?: number
+          price_gems?: number
+          rarity?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          effect?: Json
+          icon?: string | null
+          key?: string
+          name?: string
+          price_coins?: number
+          price_gems?: number
+          rarity?: string
+        }
+        Relationships: []
+      }
+      skills: {
+        Row: {
+          branch: string
+          cost_points: number
+          created_at: string
+          description: string | null
+          effect: Json
+          key: string
+          name: string
+          prerequisite_key: string | null
+          tier: number
+        }
+        Insert: {
+          branch: string
+          cost_points?: number
+          created_at?: string
+          description?: string | null
+          effect?: Json
+          key: string
+          name: string
+          prerequisite_key?: string | null
+          tier?: number
+        }
+        Update: {
+          branch?: string
+          cost_points?: number
+          created_at?: string
+          description?: string | null
+          effect?: Json
+          key?: string
+          name?: string
+          prerequisite_key?: string | null
+          tier?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skills_prerequisite_key_fkey"
+            columns: ["prerequisite_key"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["key"]
+          },
+        ]
       }
       surfboards: {
         Row: {
@@ -330,6 +502,118 @@ export type Database = {
             referencedColumns: ["key"]
           },
         ]
+      }
+      user_skills: {
+        Row: {
+          skill_key: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          skill_key: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          skill_key?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_skills_skill_key_fkey"
+            columns: ["skill_key"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      world_progress: {
+        Row: {
+          best_distance: number
+          best_score: number
+          completed: boolean
+          hidden_found: number
+          unlocked: boolean
+          updated_at: string
+          user_id: string
+          world_key: string
+        }
+        Insert: {
+          best_distance?: number
+          best_score?: number
+          completed?: boolean
+          hidden_found?: number
+          unlocked?: boolean
+          updated_at?: string
+          user_id: string
+          world_key: string
+        }
+        Update: {
+          best_distance?: number
+          best_score?: number
+          completed?: boolean
+          hidden_found?: number
+          unlocked?: boolean
+          updated_at?: string
+          user_id?: string
+          world_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "world_progress_world_key_fkey"
+            columns: ["world_key"]
+            isOneToOne: false
+            referencedRelation: "worlds"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      worlds: {
+        Row: {
+          boss_hp: number
+          boss_name: string
+          created_at: string
+          daytime: string
+          description: string | null
+          key: string
+          name: string
+          obstacle_set: Json
+          order_index: number
+          palette: Json
+          unlock_distance: number
+          weather: string
+        }
+        Insert: {
+          boss_hp?: number
+          boss_name: string
+          created_at?: string
+          daytime?: string
+          description?: string | null
+          key: string
+          name: string
+          obstacle_set?: Json
+          order_index?: number
+          palette?: Json
+          unlock_distance?: number
+          weather?: string
+        }
+        Update: {
+          boss_hp?: number
+          boss_name?: string
+          created_at?: string
+          daytime?: string
+          description?: string | null
+          key?: string
+          name?: string
+          obstacle_set?: Json
+          order_index?: number
+          palette?: Json
+          unlock_distance?: number
+          weather?: string
+        }
+        Relationships: []
       }
     }
     Views: {
