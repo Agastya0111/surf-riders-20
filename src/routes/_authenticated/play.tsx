@@ -6,6 +6,8 @@ import {
   Pause, Play, RotateCcw, Home, Coins, Trophy, Zap, Heart, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Sparkles,
 } from "lucide-react";
 import { SurfGame, type GameState } from "@/game/engine";
+import { FALLBACK_THEMES } from "@/game/themes";
+
 import { saveGameRun } from "@/lib/game-progress.functions";
 import { toast } from "sonner";
 
