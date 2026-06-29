@@ -393,7 +393,7 @@ export class SurfGame {
     if (!this.bossSpawned && this.distFloat >= 600) {
       this.bossSpawned = true;
       this.state.bossActive = true;
-      this.state.bossHealth = 6;
+      this.state.bossHealth = this.theme.bossHp;
       this.bossHits = 0;
       this.bossZ = 24;
       this.bossLane = 0;
@@ -402,6 +402,7 @@ export class SurfGame {
       this.targetSpeed = 12;
       this.emit();
     }
+
 
     // boss behavior
     if (this.state.bossActive) {
