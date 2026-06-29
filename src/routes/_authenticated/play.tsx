@@ -10,9 +10,11 @@ import { saveGameRun } from "@/lib/game-progress.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/play")({
-  head: () => ({ meta: [{ title: "Sunny Beach — Surf Riders 2.0" }] }),
+  head: () => ({ meta: [{ title: "Surf Riders 2.0" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({ world: typeof s.world === "string" ? s.world : "sunny_beach" }),
   component: PlayPage,
 });
+
 
 const CUTSCENE = [
   "Long ago, the Seven Tide Crystals kept the oceans calm…",
