@@ -67,12 +67,13 @@ function Dashboard() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button onClick={() => toast.info("Settings coming soon")} className="grid h-11 w-11 place-items-center rounded-full glass transition hover:scale-105" aria-label="Settings">
+            <Link to="/settings" className="grid h-11 w-11 place-items-center rounded-full glass transition hover:scale-105" aria-label="Settings">
               <Settings className="h-5 w-5" />
-            </button>
+            </Link>
             <button onClick={handleSignOut} className="grid h-11 w-11 place-items-center rounded-full glass transition hover:scale-105" aria-label="Sign out">
               <LogOut className="h-5 w-5" />
             </button>
+
           </div>
         </header>
 
