@@ -423,21 +423,22 @@ export class SurfGame {
       // collide with boss to damage when dashing
       if (this.dashTimer > 0 && this.bossZ < 4 && this.bossLane === this.lane) {
         this.bossHits++;
-        this.state.bossHealth = Math.max(0, 6 - this.bossHits);
+        this.state.bossHealth = Math.max(0, this.theme.bossHp - this.bossHits);
         this.bossZ = 18;
-        this.burst(this.w / 2, this.h * 0.55, "#ff7a59");
+        this.burst(this.w / 2, this.h * 0.55, this.theme.accent);
         this.emit();
-        if (this.bossHits >= 6) {
+        if (this.bossHits >= this.theme.bossHp) {
           this.state.bossActive = false;
           this.state.bossDefeated = true;
           this.scoreFloat += 500;
           this.targetSpeed = 16;
-          this.bossSpawned = false; // allow another boss later (endless)
+          this.bossSpawned = false;
           this.distFloat += 200;
           this.burst(this.w / 2, this.h * 0.55, "#ffd166");
           this.emit();
         }
       }
+
     }
 
     // collisions
