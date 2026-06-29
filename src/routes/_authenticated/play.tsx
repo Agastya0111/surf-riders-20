@@ -62,12 +62,13 @@ function PlayPage() {
   // Initialize game once canvas is mounted
   useEffect(() => {
     if (phase !== "playing" || !canvasRef.current) return;
+    const theme = FALLBACK_THEMES[world] ?? FALLBACK_THEMES.sunny_beach;
     const game = new SurfGame(canvasRef.current, {
       onStateChange: (s) => setState(s),
       onGameOver: async (r) => {
         setSaving(true);
         try {
-          const res = await save({ data: { score: r.score, coinsEarned: r.coins, distance: r.distance, bossDefeated: r.bossDefeated } });
+          const res = await save({ data: { score: r.score, coinsEarned: r.coins, distance: r.distance, bossDefeated: r.bossDefeated, world } });
           setSaved(res);
           queryClient.invalidateQueries({ queryKey: ["player-progress", user.id] });
         } catch (e) {
@@ -77,12 +78,13 @@ function PlayPage() {
           setSaving(false);
         }
       },
-    });
+    }, { theme });
     gameRef.current = game;
     game.start();
     setState({ ...game.state });
     return () => game.destroy();
-  }, [phase, save, queryClient, user.id]);
+  }, [phase, save, queryClient, user.id, world]);
+
 
   const onPause = () => gameRef.current?.pause();
   const onResume = () => gameRef.current?.resume();
