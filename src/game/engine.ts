@@ -78,6 +78,8 @@ export class SurfGame {
   private w = 0;
   private h = 0;
   private flashT = 0; // storm flash
+  private edgeFlash = 0; // red edge on hit
+  private warnPulse = 0; // pulsing hazard warnings
   private weatherPhase = 0;
 
 
