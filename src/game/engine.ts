@@ -552,6 +552,7 @@ export class SurfGame {
     this.state.combo = 0;
     this.state.comboTimer = 0;
     this.invuln = 1.2;
+    this.edgeFlash = 1;
     this.targetSpeed = Math.max(10, this.speed - 6);
     this.burst(this.w / 2, this.h * 0.7, "#ff5577");
     this.emit();
