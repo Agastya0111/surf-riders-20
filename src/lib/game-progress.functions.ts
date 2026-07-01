@@ -2,12 +2,22 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+const WORLD_KEYS = [
+  "sunny_beach",
+  "pirate_bay",
+  "frozen_ocean",
+  "volcano_sea",
+  "coral_kingdom",
+  "storm_ocean",
+  "lost_atlantis",
+] as const;
+
 const SaveSchema = z
   .object({
     score: z.number().int().min(0).max(500_000),
     coinsEarned: z.number().int().min(0).max(10_000),
     distance: z.number().int().min(0).max(100_000),
-    world: z.string().max(64).optional().default("sunny_beach"),
+    world: z.enum(WORLD_KEYS).optional().default("sunny_beach"),
     bossDefeated: z.boolean().optional().default(false),
   })
   .superRefine((d, ctx) => {
@@ -29,9 +39,10 @@ export const saveGameRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => SaveSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: profile, error: pErr } = await supabase
+    const { data: profile, error: pErr } = await supabaseAdmin
       .from("profiles")
       .select("coins, gems, highest_score, username")
       .eq("id", userId)
@@ -41,14 +52,13 @@ export const saveGameRun = createServerFn({ method: "POST" })
     const newCoins = (profile?.coins ?? 0) + data.coinsEarned;
     const newHigh = Math.max(profile?.highest_score ?? 0, data.score);
 
-    const { error: upErr } = await supabase
+    const { error: upErr } = await supabaseAdmin
       .from("profiles")
       .update({ coins: newCoins, highest_score: newHigh, current_world: data.world })
       .eq("id", userId);
     if (upErr) throw upErr;
 
-    // player_progress
-    const { data: prog } = await supabase
+    const { data: prog } = await supabaseAdmin
       .from("player_progress")
       .select("xp, level, total_distance, best_distance, total_runs, total_coins_earned, bosses_defeated, skill_points")
       .eq("user_id", userId)
@@ -61,7 +71,7 @@ export const saveGameRun = createServerFn({ method: "POST" })
     const levelsGained = Math.max(0, newLevel - oldLevel);
     const newSkillPoints = (prog?.skill_points ?? 0) + levelsGained;
 
-    await supabase.from("player_progress").upsert({
+    await supabaseAdmin.from("player_progress").upsert({
       user_id: userId,
       xp: newXp,
       level: newLevel,
@@ -74,13 +84,12 @@ export const saveGameRun = createServerFn({ method: "POST" })
       last_played_at: new Date().toISOString(),
     });
 
-    // world_progress
-    const { data: wp } = await supabase
+    const { data: wp } = await supabaseAdmin
       .from("world_progress")
       .select("best_score, best_distance, completed")
       .eq("user_id", userId).eq("world_key", data.world)
       .maybeSingle();
-    await supabase.from("world_progress").upsert({
+    await supabaseAdmin.from("world_progress").upsert({
       user_id: userId,
       world_key: data.world,
       unlocked: true,
@@ -90,28 +99,25 @@ export const saveGameRun = createServerFn({ method: "POST" })
       updated_at: new Date().toISOString(),
     });
 
-    // unlock next world if boss defeated
     if (data.bossDefeated) {
-      const { data: nextWorld } = await supabase
+      const { data: nextWorld } = await supabaseAdmin
         .from("worlds").select("key, order_index")
-        .gt("order_index", await getOrderIndex(supabase, data.world))
+        .gt("order_index", await getOrderIndex(supabaseAdmin, data.world))
         .order("order_index", { ascending: true }).limit(1).maybeSingle();
       if (nextWorld?.key) {
-        await supabase.from("world_progress").upsert({
+        await supabaseAdmin.from("world_progress").upsert({
           user_id: userId, world_key: nextWorld.key, unlocked: true,
         }, { onConflict: "user_id,world_key" });
       }
     }
 
-    // leaderboard (personal-best only)
     if (data.score > (profile?.highest_score ?? 0) && profile?.username) {
-      await supabase.from("leaderboards").insert({
+      await supabaseAdmin.from("leaderboards").insert({
         user_id: userId, username: profile.username,
         score: data.score, distance: data.distance, world: data.world,
       });
     }
 
-    // achievements
     const totals = {
       runs: (prog?.total_runs ?? 0) + 1,
       coins: (prog?.total_coins_earned ?? 0) + data.coinsEarned,
@@ -119,9 +125,9 @@ export const saveGameRun = createServerFn({ method: "POST" })
       bosses: (prog?.bosses_defeated ?? 0) + (data.bossDefeated ? 1 : 0),
       score: data.score,
     };
-    const { data: achievements } = await supabase
+    const { data: achievements } = await supabaseAdmin
       .from("achievements").select("key, threshold, metric, reward_coins, reward_gems");
-    const { data: unlocked } = await supabase
+    const { data: unlocked } = await supabaseAdmin
       .from("user_achievements").select("achievement_key").eq("user_id", userId);
     const unlockedSet = new Set((unlocked ?? []).map((u) => u.achievement_key));
     const newlyUnlocked: string[] = [];
@@ -136,11 +142,11 @@ export const saveGameRun = createServerFn({ method: "POST" })
       }
     }
     if (newlyUnlocked.length > 0) {
-      await supabase.from("user_achievements").insert(
+      await supabaseAdmin.from("user_achievements").insert(
         newlyUnlocked.map((k) => ({ user_id: userId, achievement_key: k })),
       );
       if (bonusCoins > 0 || bonusGems > 0) {
-        await supabase.from("profiles").update({
+        await supabaseAdmin.from("profiles").update({
           coins: newCoins + bonusCoins,
           gems: (profile?.gems ?? 0) + bonusGems,
         }).eq("id", userId);
