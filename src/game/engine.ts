@@ -899,62 +899,92 @@ export class SurfGame {
 
   private drawSidePalm(z: number, side: -1 | 1) {
     const ctx = this.ctx;
-    const p = this.project(z, side * (ROAD_HALF_WIDTH + 1.2));
+    // Push palms further from the lane so foreground stays uncluttered.
+    const p = this.project(z, side * (ROAD_HALF_WIDTH + 1.9));
     const s = p.scale;
     if (s < 0.05) return;
-    // trunk
-    ctx.fillStyle = "#5a3a22";
+    ctx.save();
+    // Distant palms are muted so they don't compete with hazards.
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = "#4a2e1a";
     ctx.fillRect(p.x - 4 * s, p.y - 70 * s, 8 * s, 70 * s);
-    // fronds
-    ctx.fillStyle = "#2fa86a";
+    ctx.fillStyle = "#256a45";
     for (let a = 0; a < 6; a++) {
       const ang = (a / 6) * Math.PI * 2 + 0.3;
       ctx.beginPath();
       ctx.ellipse(p.x + Math.cos(ang) * 22 * s, p.y - 70 * s + Math.sin(ang) * 14 * s, 24 * s, 8 * s, ang, 0, Math.PI * 2);
       ctx.fill();
     }
-    // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, 12 * s, 3 * s, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
 
   private drawObstacle(o: Obstacle) {
     const ctx = this.ctx;
     const p = this.project(o.z, LANE_OFFSETS[o.lane]);
-    const s = p.scale;
+    const s = p.scale * 1.28; // +28% larger for readability
     if (s < 0.04) return;
+    const c = HAZARD_COLORS[o.type];
+    const wobble = Math.sin(this.bob * 2 + o.z) * 2 * s;
+
+    // Aura glow behind the hazard so it pops against water.
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = c.outline;
+    ctx.shadowColor = c.outline;
+    ctx.shadowBlur = 22 * s;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y - 4 * s, 34 * s, 8 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     if (o.type === "rock") {
-      ctx.fillStyle = "#3a4a55";
+      // Dark silhouette + bright red outline
+      ctx.fillStyle = c.fill;
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(2, 3.5 * s);
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - 12 * s, 28 * s, 18 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y - 14 * s + wobble * 0.3, 32 * s, 22 * s, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#556773";
+      ctx.stroke();
+      ctx.fillStyle = "#3b4855";
       ctx.beginPath();
-      ctx.ellipse(p.x - 6 * s, p.y - 16 * s, 18 * s, 10 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x - 8 * s, p.y - 22 * s + wobble * 0.3, 18 * s, 10 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (o.type === "palm") {
-      ctx.fillStyle = "#5a3a22";
-      ctx.fillRect(p.x - 5 * s, p.y - 90 * s, 10 * s, 90 * s);
-      ctx.fillStyle = "#2fa86a";
-      for (let a = 0; a < 6; a++) {
-        const ang = (a / 6) * Math.PI * 2 + 0.3;
+      // Fallen log with warm orange outline
+      ctx.fillStyle = c.fill;
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(2, 3 * s);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 16 * s, 44 * s, 16 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // rings
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(1, 1.5 * s);
+      for (const r of [10, 20, 30]) {
         ctx.beginPath();
-        ctx.ellipse(p.x + Math.cos(ang) * 28 * s, p.y - 90 * s + Math.sin(ang) * 16 * s, 30 * s, 10 * s, ang, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.ellipse(p.x + r * s, p.y - 16 * s, 4 * s, 8 * s, 0, 0, Math.PI * 2);
+        ctx.stroke();
       }
     } else {
-      // wave
-      ctx.fillStyle = "#bfe8ff";
+      // Wave — cresting yellow warning
+      ctx.fillStyle = c.fill;
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(2, 3 * s);
       ctx.beginPath();
-      ctx.moveTo(p.x - 40 * s, p.y);
-      ctx.quadraticCurveTo(p.x, p.y - 32 * s, p.x + 40 * s, p.y);
+      ctx.moveTo(p.x - 48 * s, p.y);
+      ctx.quadraticCurveTo(p.x, p.y - 42 * s + wobble, p.x + 48 * s, p.y);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.stroke();
+      ctx.fillStyle = c.outline;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - 20 * s, 30 * s, 4 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y - 26 * s + wobble, 34 * s, 5 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
