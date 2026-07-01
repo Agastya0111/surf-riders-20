@@ -53,9 +53,17 @@ type Pickup = {
 
 const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
 const ROAD_HALF_WIDTH = 1.6; // world units
-const HORIZON_Y_RATIO = 0.42;
+const HORIZON_Y_RATIO = 0.46; // horizon slightly lower → more reaction time
 const FAR_Z = 80;
 const NEAR_Z = 2;
+
+// Color-coded hazard palette (consistent across all worlds)
+const HAZARD_COLORS: Record<Obstacle["type"], { fill: string; outline: string; warn: string }> = {
+  rock: { fill: "#1a1f28", outline: "#ff4d5e", warn: "rgba(255, 77, 94, 0.9)" },   // red = deadly
+  palm: { fill: "#3a1f10", outline: "#ff8a1f", warn: "rgba(255, 138, 31, 0.9)" },  // orange = solid
+  wave: { fill: "#0e3d5c", outline: "#ffd23f", warn: "rgba(255, 210, 63, 0.9)" },  // yellow = moving
+  crab: { fill: "#3a0f2a", outline: "#c084fc", warn: "rgba(192, 132, 252, 0.9)" }, // purple = boss
+};
 
 export class SurfGame {
   private canvas: HTMLCanvasElement;
@@ -70,6 +78,8 @@ export class SurfGame {
   private w = 0;
   private h = 0;
   private flashT = 0; // storm flash
+  private edgeFlash = 0; // red edge on hit
+  private warnPulse = 0; // pulsing hazard warnings
   private weatherPhase = 0;
 
 
@@ -357,6 +367,8 @@ export class SurfGame {
     this.waveOffset = (this.waveOffset + dt * 40) % 200;
     this.cloudOffset = (this.cloudOffset + dt * 8) % this.w;
     this.weatherPhase += dt;
+    this.warnPulse = (this.warnPulse + dt * 4) % (Math.PI * 2);
+    if (this.edgeFlash > 0) this.edgeFlash = Math.max(0, this.edgeFlash - dt * 2);
     if (this.theme.weather === "storm") {
       if (this.flashT > 0) this.flashT -= dt * 2;
       else if (Math.random() < dt * 0.25) this.flashT = 1;
@@ -540,6 +552,7 @@ export class SurfGame {
     this.state.combo = 0;
     this.state.comboTimer = 0;
     this.invuln = 1.2;
+    this.edgeFlash = 1;
     this.targetSpeed = Math.max(10, this.speed - 6);
     this.burst(this.w / 2, this.h * 0.7, "#ff5577");
     this.emit();
@@ -607,9 +620,9 @@ export class SurfGame {
       }
     }
 
-    // distant mountains tinted to water palette
+    // distant mountains — heavily desaturated so gameplay pops
     ctx.fillStyle = this.theme.water[1];
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = 0.35;
     ctx.beginPath();
     ctx.moveTo(0, this.h * HORIZON_Y_RATIO);
     for (let x = 0; x <= this.w; x += 40) {
@@ -628,9 +641,60 @@ export class SurfGame {
     ctx.fillStyle = water;
     ctx.fillRect(0, this.h * HORIZON_Y_RATIO, this.w, this.h - this.h * HORIZON_Y_RATIO);
 
+    // atmospheric haze near horizon → blurs distant scenery so foreground reads
+    const haze = ctx.createLinearGradient(0, this.h * HORIZON_Y_RATIO, 0, this.h * (HORIZON_Y_RATIO + 0.18));
+    haze.addColorStop(0, "rgba(255,255,255,0.25)");
+    haze.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, this.h * HORIZON_Y_RATIO, this.w, this.h * 0.2);
 
-    // wave lines (perspective)
-    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    // ---------- DISTINCT SURFING LANE ----------
+    // Lane surface: a lighter trapezoid that clearly separates gameplay from the ocean.
+    const nearL = this.project(NEAR_Z, -ROAD_HALF_WIDTH);
+    const nearR = this.project(NEAR_Z, ROAD_HALF_WIDTH);
+    const farL = this.project(FAR_Z * 0.7, -ROAD_HALF_WIDTH);
+    const farR = this.project(FAR_Z * 0.7, ROAD_HALF_WIDTH);
+    const laneGrad = ctx.createLinearGradient(0, farL.y, 0, nearL.y);
+    laneGrad.addColorStop(0, "rgba(180, 230, 255, 0.05)");
+    laneGrad.addColorStop(1, "rgba(180, 230, 255, 0.28)");
+    ctx.fillStyle = laneGrad;
+    ctx.beginPath();
+    ctx.moveTo(farL.x, farL.y);
+    ctx.lineTo(farR.x, farR.y);
+    ctx.lineTo(nearR.x, nearR.y);
+    ctx.lineTo(nearL.x, nearL.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glowing foam edges along the lane
+    const drawFoamEdge = (side: -1 | 1) => {
+      const near = this.project(NEAR_Z, side * ROAD_HALF_WIDTH);
+      const far = this.project(FAR_Z * 0.7, side * ROAD_HALF_WIDTH);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 3;
+      ctx.shadowColor = "rgba(180, 230, 255, 0.8)";
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(near.x, near.y);
+      ctx.lineTo(far.x, far.y);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // scrolling foam bubbles
+      for (let k = 0; k < 8; k++) {
+        const t = ((k / 8) + (this.waveOffset / 200)) % 1;
+        const zk = NEAR_Z + t * (FAR_Z * 0.7 - NEAR_Z);
+        const p = this.project(zk, side * ROAD_HALF_WIDTH);
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(1, 4 * p.scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    drawFoamEdge(-1);
+    drawFoamEdge(1);
+
+    // wave lines (perspective) — subtle inside the lane
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 1;
     for (let i = 0; i < 16; i++) {
       const z = i * 5 + ((this.waveOffset / 40) * 5) % 5;
@@ -643,7 +707,7 @@ export class SurfGame {
     }
 
     // lane stripes
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
     ctx.setLineDash([12, 18]);
     for (const lane of [-0.5, 0.5]) {
       ctx.beginPath();
@@ -659,6 +723,14 @@ export class SurfGame {
     type SceneItem = { z: number; draw: () => void };
     const items: SceneItem[] = [];
 
+    // Hazard warning markers ripple on the water where obstacles will arrive
+    for (const o of this.obstacles) {
+      if (o.hit) continue;
+      if (o.z > 8 && o.z < 22) {
+        items.push({ z: o.z + 0.02, draw: () => this.drawHazardWarning(o) });
+      }
+    }
+
     for (const o of this.obstacles) {
       if (o.hit) continue;
       items.push({ z: o.z, draw: () => this.drawObstacle(o) });
@@ -671,10 +743,10 @@ export class SurfGame {
       items.push({ z: this.bossZ, draw: () => this.drawBoss() });
     }
 
-    // beach sides — palms scrolling
-    const palmRail = (((this.distFloat * 3) % 6));
-    for (let i = 0; i < 10; i++) {
-      const z = i * 6 - palmRail + 2;
+    // Beach sides — fewer, muted palms so they don't compete with the lane
+    const palmRail = (((this.distFloat * 3) % 8));
+    for (let i = 0; i < 6; i++) {
+      const z = i * 8 - palmRail + 2;
       if (z < NEAR_Z || z > FAR_Z) continue;
       items.push({ z, draw: () => this.drawSidePalm(z, -1) });
       items.push({ z: z + 0.01, draw: () => this.drawSidePalm(z, 1) });
@@ -717,6 +789,49 @@ export class SurfGame {
     vg.addColorStop(1, "rgba(0,20,40,0.45)");
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, this.w, this.h);
+
+    // damage edge flash — red inset when the player just took a hit
+    if (this.edgeFlash > 0) {
+      const ef = ctx.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.25, this.w / 2, this.h / 2, this.h * 0.8);
+      ef.addColorStop(0, "rgba(255, 60, 90, 0)");
+      ef.addColorStop(1, `rgba(255, 60, 90, ${0.55 * this.edgeFlash})`);
+      ctx.fillStyle = ef;
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+  }
+
+  private drawHazardWarning(o: Obstacle) {
+    const ctx = this.ctx;
+    // Place the marker at a fixed "reticle" distance ahead of the player.
+    const markerZ = 3.2;
+    const p = this.project(markerZ, LANE_OFFSETS[o.lane]);
+    const c = HAZARD_COLORS[o.type];
+    // Fade the pulse in as the hazard closes in (z: 22 → 8).
+    const proximity = 1 - Math.max(0, Math.min(1, (o.z - 8) / 14));
+    const pulse = 0.5 + 0.5 * Math.sin(this.warnPulse * 2);
+    const alpha = proximity * (0.35 + 0.45 * pulse);
+    if (alpha < 0.05) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = c.warn;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = c.warn;
+    ctx.shadowBlur = 14;
+    const rx = 44 * p.scale + pulse * 8;
+    const ry = 14 * p.scale + pulse * 3;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + 4, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // inner arrow pointing down toward the lane
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = c.warn;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y - 22 * p.scale);
+    ctx.lineTo(p.x - 8 * p.scale, p.y - 34 * p.scale);
+    ctx.lineTo(p.x + 8 * p.scale, p.y - 34 * p.scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   private drawWeather() {
@@ -784,62 +899,92 @@ export class SurfGame {
 
   private drawSidePalm(z: number, side: -1 | 1) {
     const ctx = this.ctx;
-    const p = this.project(z, side * (ROAD_HALF_WIDTH + 1.2));
+    // Push palms further from the lane so foreground stays uncluttered.
+    const p = this.project(z, side * (ROAD_HALF_WIDTH + 1.9));
     const s = p.scale;
     if (s < 0.05) return;
-    // trunk
-    ctx.fillStyle = "#5a3a22";
+    ctx.save();
+    // Distant palms are muted so they don't compete with hazards.
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = "#4a2e1a";
     ctx.fillRect(p.x - 4 * s, p.y - 70 * s, 8 * s, 70 * s);
-    // fronds
-    ctx.fillStyle = "#2fa86a";
+    ctx.fillStyle = "#256a45";
     for (let a = 0; a < 6; a++) {
       const ang = (a / 6) * Math.PI * 2 + 0.3;
       ctx.beginPath();
       ctx.ellipse(p.x + Math.cos(ang) * 22 * s, p.y - 70 * s + Math.sin(ang) * 14 * s, 24 * s, 8 * s, ang, 0, Math.PI * 2);
       ctx.fill();
     }
-    // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, 12 * s, 3 * s, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
 
   private drawObstacle(o: Obstacle) {
     const ctx = this.ctx;
     const p = this.project(o.z, LANE_OFFSETS[o.lane]);
-    const s = p.scale;
+    const s = p.scale * 1.28; // +28% larger for readability
     if (s < 0.04) return;
+    const c = HAZARD_COLORS[o.type];
+    const wobble = Math.sin(this.bob * 2 + o.z) * 2 * s;
+
+    // Aura glow behind the hazard so it pops against water.
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = c.outline;
+    ctx.shadowColor = c.outline;
+    ctx.shadowBlur = 22 * s;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y - 4 * s, 34 * s, 8 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     if (o.type === "rock") {
-      ctx.fillStyle = "#3a4a55";
+      // Dark silhouette + bright red outline
+      ctx.fillStyle = c.fill;
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(2, 3.5 * s);
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - 12 * s, 28 * s, 18 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y - 14 * s + wobble * 0.3, 32 * s, 22 * s, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#556773";
+      ctx.stroke();
+      ctx.fillStyle = "#3b4855";
       ctx.beginPath();
-      ctx.ellipse(p.x - 6 * s, p.y - 16 * s, 18 * s, 10 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x - 8 * s, p.y - 22 * s + wobble * 0.3, 18 * s, 10 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (o.type === "palm") {
-      ctx.fillStyle = "#5a3a22";
-      ctx.fillRect(p.x - 5 * s, p.y - 90 * s, 10 * s, 90 * s);
-      ctx.fillStyle = "#2fa86a";
-      for (let a = 0; a < 6; a++) {
-        const ang = (a / 6) * Math.PI * 2 + 0.3;
+      // Fallen log with warm orange outline
+      ctx.fillStyle = c.fill;
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(2, 3 * s);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 16 * s, 44 * s, 16 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // rings
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(1, 1.5 * s);
+      for (const r of [10, 20, 30]) {
         ctx.beginPath();
-        ctx.ellipse(p.x + Math.cos(ang) * 28 * s, p.y - 90 * s + Math.sin(ang) * 16 * s, 30 * s, 10 * s, ang, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.ellipse(p.x + r * s, p.y - 16 * s, 4 * s, 8 * s, 0, 0, Math.PI * 2);
+        ctx.stroke();
       }
     } else {
-      // wave
-      ctx.fillStyle = "#bfe8ff";
+      // Wave — cresting yellow warning
+      ctx.fillStyle = c.fill;
+      ctx.strokeStyle = c.outline;
+      ctx.lineWidth = Math.max(2, 3 * s);
       ctx.beginPath();
-      ctx.moveTo(p.x - 40 * s, p.y);
-      ctx.quadraticCurveTo(p.x, p.y - 32 * s, p.x + 40 * s, p.y);
+      ctx.moveTo(p.x - 48 * s, p.y);
+      ctx.quadraticCurveTo(p.x, p.y - 42 * s + wobble, p.x + 48 * s, p.y);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.stroke();
+      ctx.fillStyle = c.outline;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - 20 * s, 30 * s, 4 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y - 26 * s + wobble, 34 * s, 5 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -920,11 +1065,42 @@ export class SurfGame {
     const flicker = this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0;
     if (flicker) ctx.globalAlpha = 0.5;
 
+    // Persistent glowing water trail behind the surfer
+    ctx.save();
+    for (let i = 1; i <= 5; i++) {
+      const a = (0.28 - i * 0.045) * (this.dashTimer > 0 ? 2 : 1);
+      ctx.fillStyle = `rgba(180, 235, 255, ${Math.max(0, a)})`;
+      ctx.beginPath();
+      ctx.ellipse(x, baseY + 14 + i * 3, 46 - i * 4, 6 - i * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Splash under the board (kicked-up spray)
+    if (!this.jumping) {
+      const splashPhase = (this.bob * 2) % (Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      for (let i = 0; i < 6; i++) {
+        const off = (i - 2.5) * 10;
+        const rise = Math.abs(Math.sin(splashPhase + i)) * 4;
+        ctx.beginPath();
+        ctx.arc(x + off, baseY + 18 - rise, 2 + Math.random() * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
     ctx.beginPath();
-    ctx.ellipse(x, baseY + 12, 36 - this.jump * 18, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, baseY + 12, 40 - this.jump * 18, 9, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Bright outline halo so the player is the easiest thing to locate
+    ctx.save();
+    ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 3;
 
     // surfboard
     ctx.save();
@@ -935,33 +1111,36 @@ export class SurfGame {
     grad.addColorStop(1, "#ff7a59");
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 50, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 52, 15, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
     ctx.fillRect(-30, -2, 60, 3);
     ctx.restore();
 
-    // body — surfer (simple)
+    // body — surfer
     const bodyH = this.sliding ? 28 : 46;
     // legs
     ctx.fillStyle = "#1b3b5a";
     ctx.fillRect(x - 10, y - bodyH * 0.4, 8, bodyH * 0.4);
     ctx.fillRect(x + 2, y - bodyH * 0.4, 8, bodyH * 0.4);
-    // torso
-    ctx.fillStyle = "#21c2c2";
+    // torso (bright, saturated)
+    ctx.fillStyle = "#22e0e0";
     ctx.fillRect(x - 14, y - bodyH, 28, bodyH * 0.6);
+    ctx.strokeRect(x - 14, y - bodyH, 28, bodyH * 0.6);
     // head
     ctx.fillStyle = "#f3c79b";
     ctx.beginPath();
     ctx.arc(x, y - bodyH - 8, 10, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     // hair
     ctx.fillStyle = "#3a2014";
     ctx.beginPath();
     ctx.arc(x, y - bodyH - 12, 10, Math.PI, Math.PI * 2);
     ctx.fill();
-    // arms (lean)
-    ctx.strokeStyle = "#f3c79b";
+    // arms
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
     ctx.lineWidth = 5;
     ctx.beginPath();
     ctx.moveTo(x - 12, y - bodyH * 0.7);
@@ -969,13 +1148,14 @@ export class SurfGame {
     ctx.moveTo(x + 12, y - bodyH * 0.7);
     ctx.lineTo(x + 22 - this.laneAnim * 4, y - bodyH * 0.4);
     ctx.stroke();
+    ctx.restore();
 
-    // dash trail
+    // Dash burst
     if (this.dashTimer > 0) {
-      ctx.fillStyle = "rgba(122,219,255,0.4)";
-      for (let i = 1; i <= 4; i++) {
+      ctx.fillStyle = "rgba(122,219,255,0.5)";
+      for (let i = 1; i <= 5; i++) {
         ctx.beginPath();
-        ctx.ellipse(x - i * 18, y + 10, 50 - i * 6, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(x - i * 20, y + 10, 54 - i * 6, 11, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
