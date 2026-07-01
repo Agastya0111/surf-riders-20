@@ -367,6 +367,8 @@ export class SurfGame {
     this.waveOffset = (this.waveOffset + dt * 40) % 200;
     this.cloudOffset = (this.cloudOffset + dt * 8) % this.w;
     this.weatherPhase += dt;
+    this.warnPulse = (this.warnPulse + dt * 4) % (Math.PI * 2);
+    if (this.edgeFlash > 0) this.edgeFlash = Math.max(0, this.edgeFlash - dt * 2);
     if (this.theme.weather === "storm") {
       if (this.flashT > 0) this.flashT -= dt * 2;
       else if (Math.random() < dt * 0.25) this.flashT = 1;
