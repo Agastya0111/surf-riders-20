@@ -53,9 +53,17 @@ type Pickup = {
 
 const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
 const ROAD_HALF_WIDTH = 1.6; // world units
-const HORIZON_Y_RATIO = 0.42;
+const HORIZON_Y_RATIO = 0.46; // horizon slightly lower → more reaction time
 const FAR_Z = 80;
 const NEAR_Z = 2;
+
+// Color-coded hazard palette (consistent across all worlds)
+const HAZARD_COLORS: Record<Obstacle["type"], { fill: string; outline: string; warn: string }> = {
+  rock: { fill: "#1a1f28", outline: "#ff4d5e", warn: "rgba(255, 77, 94, 0.9)" },   // red = deadly
+  palm: { fill: "#3a1f10", outline: "#ff8a1f", warn: "rgba(255, 138, 31, 0.9)" },  // orange = solid
+  wave: { fill: "#0e3d5c", outline: "#ffd23f", warn: "rgba(255, 210, 63, 0.9)" },  // yellow = moving
+  crab: { fill: "#3a0f2a", outline: "#c084fc", warn: "rgba(192, 132, 252, 0.9)" }, // purple = boss
+};
 
 export class SurfGame {
   private canvas: HTMLCanvasElement;
