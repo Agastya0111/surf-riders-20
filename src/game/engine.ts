@@ -1065,11 +1065,42 @@ export class SurfGame {
     const flicker = this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0;
     if (flicker) ctx.globalAlpha = 0.5;
 
+    // Persistent glowing water trail behind the surfer
+    ctx.save();
+    for (let i = 1; i <= 5; i++) {
+      const a = (0.28 - i * 0.045) * (this.dashTimer > 0 ? 2 : 1);
+      ctx.fillStyle = `rgba(180, 235, 255, ${Math.max(0, a)})`;
+      ctx.beginPath();
+      ctx.ellipse(x, baseY + 14 + i * 3, 46 - i * 4, 6 - i * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Splash under the board (kicked-up spray)
+    if (!this.jumping) {
+      const splashPhase = (this.bob * 2) % (Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      for (let i = 0; i < 6; i++) {
+        const off = (i - 2.5) * 10;
+        const rise = Math.abs(Math.sin(splashPhase + i)) * 4;
+        ctx.beginPath();
+        ctx.arc(x + off, baseY + 18 - rise, 2 + Math.random() * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
     ctx.beginPath();
-    ctx.ellipse(x, baseY + 12, 36 - this.jump * 18, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, baseY + 12, 40 - this.jump * 18, 9, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Bright outline halo so the player is the easiest thing to locate
+    ctx.save();
+    ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 3;
 
     // surfboard
     ctx.save();
@@ -1080,33 +1111,36 @@ export class SurfGame {
     grad.addColorStop(1, "#ff7a59");
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 50, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 52, 15, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
     ctx.fillRect(-30, -2, 60, 3);
     ctx.restore();
 
-    // body — surfer (simple)
+    // body — surfer
     const bodyH = this.sliding ? 28 : 46;
     // legs
     ctx.fillStyle = "#1b3b5a";
     ctx.fillRect(x - 10, y - bodyH * 0.4, 8, bodyH * 0.4);
     ctx.fillRect(x + 2, y - bodyH * 0.4, 8, bodyH * 0.4);
-    // torso
-    ctx.fillStyle = "#21c2c2";
+    // torso (bright, saturated)
+    ctx.fillStyle = "#22e0e0";
     ctx.fillRect(x - 14, y - bodyH, 28, bodyH * 0.6);
+    ctx.strokeRect(x - 14, y - bodyH, 28, bodyH * 0.6);
     // head
     ctx.fillStyle = "#f3c79b";
     ctx.beginPath();
     ctx.arc(x, y - bodyH - 8, 10, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     // hair
     ctx.fillStyle = "#3a2014";
     ctx.beginPath();
     ctx.arc(x, y - bodyH - 12, 10, Math.PI, Math.PI * 2);
     ctx.fill();
-    // arms (lean)
-    ctx.strokeStyle = "#f3c79b";
+    // arms
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
     ctx.lineWidth = 5;
     ctx.beginPath();
     ctx.moveTo(x - 12, y - bodyH * 0.7);
@@ -1114,13 +1148,14 @@ export class SurfGame {
     ctx.moveTo(x + 12, y - bodyH * 0.7);
     ctx.lineTo(x + 22 - this.laneAnim * 4, y - bodyH * 0.4);
     ctx.stroke();
+    ctx.restore();
 
-    // dash trail
+    // Dash burst
     if (this.dashTimer > 0) {
-      ctx.fillStyle = "rgba(122,219,255,0.4)";
-      for (let i = 1; i <= 4; i++) {
+      ctx.fillStyle = "rgba(122,219,255,0.5)";
+      for (let i = 1; i <= 5; i++) {
         ctx.beginPath();
-        ctx.ellipse(x - i * 18, y + 10, 50 - i * 6, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(x - i * 20, y + 10, 54 - i * 6, 11, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
