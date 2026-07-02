@@ -364,16 +364,19 @@ export class SurfGame {
   private emit() { this.cb.onStateChange({ ...this.state }); }
 
   private update(dt: number) {
-    // speed ramp
+    // speed ramp — base and cap grow with level for gradual difficulty
+    const lvl = this.state.level;
+    const base = 14 + (lvl - 1) * 0.8;
+    const cap = Math.min(38, 28 + (lvl - 1) * 1.2);
     if (!this.state.bossActive) {
-      this.targetSpeed = Math.min(28, 14 + this.distFloat / 120);
+      this.targetSpeed = Math.min(cap, base + this.distFloat / 120);
     }
     this.speed += (this.targetSpeed - this.speed) * Math.min(1, dt * 2);
 
     // timers
     if (this.dashTimer > 0) {
       this.dashTimer -= dt;
-      if (this.dashTimer <= 0) this.targetSpeed = 14 + this.distFloat / 120;
+      if (this.dashTimer <= 0) this.targetSpeed = Math.min(cap, base + this.distFloat / 120);
     }
     if (this.invuln > 0) this.invuln -= dt;
     if (this.slideTimer > 0) { this.slideTimer -= dt; if (this.slideTimer <= 0) this.sliding = false; }
