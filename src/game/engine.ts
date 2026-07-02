@@ -11,7 +11,9 @@ export type GameState = {
   status: GameStatus;
   score: number;
   distance: number; // meters
-  coins: number;
+  coins: number; // silver coins collected this run
+  silverTarget: number; // required silver to complete level
+  level: number;
   combo: number;
   comboTimer: number; // seconds remaining
   multiplier: number;
@@ -24,12 +26,16 @@ export type GameState = {
 export type GameCallbacks = {
   onStateChange: (s: GameState) => void;
   onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
+  onLevelComplete?: (silver: number, level: number) => void;
 };
 
 export type GameOptions = {
   theme?: WorldTheme;
   touchSensitivity?: number; // 0.5..2 (default 1)
   reduceMotion?: boolean;
+  level?: number;
+  silverTarget?: number;
+  disableBoss?: boolean;
 };
 
 
@@ -124,6 +130,8 @@ export class SurfGame {
     score: 0,
     distance: 0,
     coins: 0,
+    silverTarget: 5000,
+    level: 1,
     combo: 0,
     comboTimer: 0,
     multiplier: 1,
@@ -132,6 +140,9 @@ export class SurfGame {
     bossActive: false,
     bossDefeated: false,
   };
+
+  private disableBoss = false;
+  private levelCompleteEmitted = false;
 
   constructor(canvas: HTMLCanvasElement, cb: GameCallbacks, opts: GameOptions = {}) {
     this.canvas = canvas;
@@ -143,6 +154,12 @@ export class SurfGame {
     this.touchSens = opts.touchSensitivity ?? 1;
     this.reduceMotion = opts.reduceMotion ?? false;
     this.state.bossHealth = this.theme.bossHp;
+    this.state.level = Math.max(1, opts.level ?? 1);
+    this.state.silverTarget = Math.max(1, opts.silverTarget ?? 5000);
+    this.disableBoss = opts.disableBoss ?? true; // level flow uses post-level monster
+    // Difficulty scales with level
+    this.speed = 14 + (this.state.level - 1) * 0.8;
+    this.targetSpeed = this.speed;
     this.resize();
     this.bindInput();
   }
@@ -186,8 +203,8 @@ export class SurfGame {
     this.slideTimer = 0;
     this.dashTimer = 0;
     this.invuln = 0;
-    this.speed = 14;
-    this.targetSpeed = 14;
+    this.speed = 14 + (this.state.level - 1) * 0.8;
+    this.targetSpeed = this.speed;
     this.obstacles = [];
     this.pickups = [];
     this.particles = [];
@@ -198,16 +215,19 @@ export class SurfGame {
     this.nextChestAt = 250;
     this.bossSpawned = false;
     this.bossHits = 0;
+    this.levelCompleteEmitted = false;
     this.state = {
       status: "playing",
       score: 0,
       distance: 0,
       coins: 0,
+      silverTarget: this.state.silverTarget,
+      level: this.state.level,
       combo: 0,
       comboTimer: 0,
       multiplier: 1,
       health: 3,
-      bossHealth: 6,
+      bossHealth: this.theme.bossHp,
       bossActive: false,
       bossDefeated: false,
     };
@@ -344,16 +364,19 @@ export class SurfGame {
   private emit() { this.cb.onStateChange({ ...this.state }); }
 
   private update(dt: number) {
-    // speed ramp
+    // speed ramp — base and cap grow with level for gradual difficulty
+    const lvl = this.state.level;
+    const base = 14 + (lvl - 1) * 0.8;
+    const cap = Math.min(38, 28 + (lvl - 1) * 1.2);
     if (!this.state.bossActive) {
-      this.targetSpeed = Math.min(28, 14 + this.distFloat / 120);
+      this.targetSpeed = Math.min(cap, base + this.distFloat / 120);
     }
     this.speed += (this.targetSpeed - this.speed) * Math.min(1, dt * 2);
 
     // timers
     if (this.dashTimer > 0) {
       this.dashTimer -= dt;
-      if (this.dashTimer <= 0) this.targetSpeed = 14 + this.distFloat / 120;
+      if (this.dashTimer <= 0) this.targetSpeed = Math.min(cap, base + this.distFloat / 120);
     }
     if (this.invuln > 0) this.invuln -= dt;
     if (this.slideTimer > 0) { this.slideTimer -= dt; if (this.slideTimer <= 0) this.sliding = false; }
@@ -407,8 +430,8 @@ export class SurfGame {
     for (const o of this.obstacles) o.z -= this.speed * dt;
     for (const p of this.pickups) p.z -= this.speed * dt;
 
-    // boss trigger at 600m, or every 800m after defeat (endless)
-    if (!this.bossSpawned && this.distFloat >= 600) {
+    // boss trigger (disabled by default in level flow — post-level monster battles handle bosses)
+    if (!this.disableBoss && !this.bossSpawned && this.distFloat >= 600) {
       this.bossSpawned = true;
       this.state.bossActive = true;
       this.state.bossHealth = this.theme.bossHp;
@@ -419,6 +442,16 @@ export class SurfGame {
       this.bossAttackTimer = 2;
       this.targetSpeed = 12;
       this.emit();
+    }
+
+    // Level complete: silver target reached → auto-pause and fire callback
+    if (!this.levelCompleteEmitted && this.state.coins >= this.state.silverTarget) {
+      this.levelCompleteEmitted = true;
+      this.state.status = "paused";
+      this.emit();
+      this.cb.onLevelComplete?.(this.state.coins, this.state.level);
+      cancelAnimationFrame(this.raf);
+      return;
     }
 
 
@@ -487,13 +520,13 @@ export class SurfGame {
       }
       p.collected = true;
       if (p.type === "coin") {
-        this.state.coins += 1;
+        this.state.coins += 50; // silver per coin
         this.state.combo += 1;
         this.state.comboTimer = 2.2;
         this.scoreFloat += 10 * this.state.multiplier;
         this.burst(this.w / 2, this.h * 0.62, "#ffd166");
       } else {
-        this.state.coins += 25;
+        this.state.coins += 500; // silver per chest
         this.state.combo += 5;
         this.state.comboTimer = 2.5;
         this.scoreFloat += 200;

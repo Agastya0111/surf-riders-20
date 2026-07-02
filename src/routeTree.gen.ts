@@ -23,6 +23,8 @@ import { Route as AuthenticatedPlayRouteImport } from './routes/_authenticated/p
 import { Route as AuthenticatedLeaderboardsRouteImport } from './routes/_authenticated/leaderboards'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDailyRouteImport } from './routes/_authenticated/daily'
+import { Route as AuthenticatedAvatarSelectRouteImport } from './routes/_authenticated/avatar-select'
+import { Route as AuthenticatedArmoryRouteImport } from './routes/_authenticated/armory'
 import { Route as AuthenticatedAchievementsRouteImport } from './routes/_authenticated/achievements'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -95,6 +97,17 @@ const AuthenticatedDailyRoute = AuthenticatedDailyRouteImport.update({
   path: '/daily',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAvatarSelectRoute =
+  AuthenticatedAvatarSelectRouteImport.update({
+    id: '/avatar-select',
+    path: '/avatar-select',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedArmoryRoute = AuthenticatedArmoryRouteImport.update({
+  id: '/armory',
+  path: '/armory',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAchievementsRoute =
   AuthenticatedAchievementsRouteImport.update({
     id: '/achievements',
@@ -109,6 +122,8 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/achievements': typeof AuthenticatedAchievementsRoute
+  '/armory': typeof AuthenticatedArmoryRoute
+  '/avatar-select': typeof AuthenticatedAvatarSelectRoute
   '/daily': typeof AuthenticatedDailyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/leaderboards': typeof AuthenticatedLeaderboardsRoute
@@ -125,6 +140,8 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/achievements': typeof AuthenticatedAchievementsRoute
+  '/armory': typeof AuthenticatedArmoryRoute
+  '/avatar-select': typeof AuthenticatedAvatarSelectRoute
   '/daily': typeof AuthenticatedDailyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/leaderboards': typeof AuthenticatedLeaderboardsRoute
@@ -143,6 +160,8 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/achievements': typeof AuthenticatedAchievementsRoute
+  '/_authenticated/armory': typeof AuthenticatedArmoryRoute
+  '/_authenticated/avatar-select': typeof AuthenticatedAvatarSelectRoute
   '/_authenticated/daily': typeof AuthenticatedDailyRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/leaderboards': typeof AuthenticatedLeaderboardsRoute
@@ -161,6 +180,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sitemap.xml'
     | '/achievements'
+    | '/armory'
+    | '/avatar-select'
     | '/daily'
     | '/dashboard'
     | '/leaderboards'
@@ -177,6 +198,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sitemap.xml'
     | '/achievements'
+    | '/armory'
+    | '/avatar-select'
     | '/daily'
     | '/dashboard'
     | '/leaderboards'
@@ -194,6 +217,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sitemap.xml'
     | '/_authenticated/achievements'
+    | '/_authenticated/armory'
+    | '/_authenticated/avatar-select'
     | '/_authenticated/daily'
     | '/_authenticated/dashboard'
     | '/_authenticated/leaderboards'
@@ -313,6 +338,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDailyRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/avatar-select': {
+      id: '/_authenticated/avatar-select'
+      path: '/avatar-select'
+      fullPath: '/avatar-select'
+      preLoaderRoute: typeof AuthenticatedAvatarSelectRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/armory': {
+      id: '/_authenticated/armory'
+      path: '/armory'
+      fullPath: '/armory'
+      preLoaderRoute: typeof AuthenticatedArmoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/achievements': {
       id: '/_authenticated/achievements'
       path: '/achievements'
@@ -325,6 +364,8 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAchievementsRoute: typeof AuthenticatedAchievementsRoute
+  AuthenticatedArmoryRoute: typeof AuthenticatedArmoryRoute
+  AuthenticatedAvatarSelectRoute: typeof AuthenticatedAvatarSelectRoute
   AuthenticatedDailyRoute: typeof AuthenticatedDailyRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedLeaderboardsRoute: typeof AuthenticatedLeaderboardsRoute
@@ -337,6 +378,8 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAchievementsRoute: AuthenticatedAchievementsRoute,
+  AuthenticatedArmoryRoute: AuthenticatedArmoryRoute,
+  AuthenticatedAvatarSelectRoute: AuthenticatedAvatarSelectRoute,
   AuthenticatedDailyRoute: AuthenticatedDailyRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedLeaderboardsRoute: AuthenticatedLeaderboardsRoute,
