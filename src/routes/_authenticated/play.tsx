@@ -1,122 +1,163 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
-  Pause, Play, RotateCcw, Home, Coins, Trophy, Zap, Heart, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Sparkles,
+  Pause, Play, RotateCcw, Home, Coins, Heart, ArrowLeft, ArrowRight, ArrowUp, ArrowDown,
+  Sparkles, ShoppingBag, Sword, Trophy, Zap, RotateCw, Award,
 } from "lucide-react";
 import { SurfGame, type GameState } from "@/game/engine";
 import { FALLBACK_THEMES } from "@/game/themes";
-
-import { saveGameRun } from "@/lib/game-progress.functions";
+import { getAvatar } from "@/game/avatars";
+import { getWeapon, silverTargetForLevel, monsterForLevel, levelRewards } from "@/game/weapons";
+import { completeLevel } from "@/lib/level.functions";
+import { usePlayerProgress } from "@/hooks/use-player-progress";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/play")({
-  head: () => ({ meta: [{ title: "Surf Riders 2.0" }] }),
-  validateSearch: (s: Record<string, unknown>) => ({ world: typeof s.world === "string" ? s.world : "sunny_beach" }),
+  head: () => ({ meta: [{ title: "Play — Surf Riders 2.0" }] }),
   component: PlayPage,
 });
 
-
-const CUTSCENE = [
-  "Long ago, the Seven Tide Crystals kept the oceans calm…",
-  "Until the Pirate King stole them, summoning storms and sea monsters.",
-  "The Ocean Guardian has chosen YOU to recover the crystals.",
-  "Your journey begins on Sunny Beach. Ride the wave, hero.",
-];
+type Phase =
+  | "loading"
+  | "landscape-required"
+  | "playing"
+  | "level-complete"
+  | "monster-battle"
+  | "monster-victory"
+  | "monster-defeat"
+  | "game-over";
 
 function PlayPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   const { user } = Route.useRouteContext();
-  const { world } = Route.useSearch();
-  const save = useServerFn(saveGameRun);
+  const complete = useServerFn(completeLevel);
 
+  const { data: progress } = usePlayerProgress(user.id);
+  const profile = progress?.profile as
+    | { current_level?: number; equipped_weapon?: string | null; selected_avatar?: string | null; silver_coins?: number; gold_coins?: number }
+    | undefined;
+
+  const level = profile?.current_level ?? 1;
+  const silverTarget = silverTargetForLevel(level);
+  const avatar = getAvatar(profile?.selected_avatar);
+  const weapon = getWeapon(profile?.equipped_weapon);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<SurfGame | null>(null);
-
-  const [phase, setPhase] = useState<"loading" | "cutscene" | "playing">("loading");
-  const [cutIdx, setCutIdx] = useState(0);
+  const [phase, setPhase] = useState<Phase>("loading");
   const [state, setState] = useState<GameState | null>(null);
+  const [silverAtComplete, setSilverAtComplete] = useState(0);
+  const [rewardsPreview] = useState(() => levelRewards(level));
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<{ coins: number; highest_score: number } | null>(null);
+  const [savedReward, setSavedReward] = useState<null | { goldGained: number; xpGained: number; bonusSilver: number; nextLevel: number }>(null);
 
-  // Loading screen
+  // Landscape gate
+  const [isPortrait, setIsPortrait] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setPhase("cutscene"), 900);
-    return () => clearTimeout(t);
+    const check = () => setIsPortrait(window.innerHeight > window.innerWidth && window.innerWidth < 900);
+    check();
+    window.addEventListener("resize", check);
+    window.addEventListener("orientationchange", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      window.removeEventListener("orientationchange", check);
+    };
   }, []);
 
-  // Cutscene auto-advance
+  // Loading → playing
   useEffect(() => {
-    if (phase !== "cutscene") return;
-    const t = setTimeout(() => {
-      if (cutIdx < CUTSCENE.length - 1) setCutIdx((i) => i + 1);
-    }, 3000);
+    if (!progress) return;
+    const t = setTimeout(() => setPhase("playing"), 700);
     return () => clearTimeout(t);
-  }, [phase, cutIdx]);
+  }, [progress]);
 
-  const startGame = useCallback(() => {
-    setPhase("playing");
-  }, []);
-
-  // Initialize game once canvas is mounted
-  useEffect(() => {
-    if (phase !== "playing" || !canvasRef.current) return;
-    const theme = FALLBACK_THEMES[world] ?? FALLBACK_THEMES.sunny_beach;
-    const game = new SurfGame(canvasRef.current, {
-      onStateChange: (s) => setState(s),
-      onGameOver: async (r) => {
-        setSaving(true);
-        try {
-          const res = await save({ data: { score: r.score, coinsEarned: r.coins, distance: r.distance, bossDefeated: r.bossDefeated, world } });
-          setSaved(res);
-          queryClient.invalidateQueries({ queryKey: ["player-progress", user.id] });
-        } catch (e) {
-          console.error(e);
-          toast.error("Could not save run. Progress kept locally.");
-        } finally {
-          setSaving(false);
-        }
+  const startEngine = useCallback(() => {
+    if (!canvasRef.current) return;
+    if (gameRef.current) gameRef.current.destroy();
+    const theme = FALLBACK_THEMES.sunny_beach;
+    const game = new SurfGame(
+      canvasRef.current,
+      {
+        onStateChange: (s) => setState(s),
+        onGameOver: () => setPhase("game-over"),
+        onLevelComplete: (silver) => {
+          setSilverAtComplete(silver);
+          setPhase("level-complete");
+        },
       },
-    }, { theme });
+      { theme, level, silverTarget, disableBoss: true },
+    );
     gameRef.current = game;
     game.start();
     setState({ ...game.state });
-    return () => game.destroy();
-  }, [phase, save, queryClient, user.id, world]);
+  }, [level, silverTarget]);
 
+  useEffect(() => {
+    if (phase !== "playing" || !canvasRef.current) return;
+    startEngine();
+    return () => gameRef.current?.destroy();
+  }, [phase, startEngine]);
 
   const onPause = () => gameRef.current?.pause();
   const onResume = () => gameRef.current?.resume();
-  const onRestart = () => {
-    setSaved(null);
-    gameRef.current?.restart();
+  const onRestartLevel = () => {
+    setSavedReward(null);
+    setState(null);
+    gameRef.current?.destroy();
+    setPhase("playing");
   };
   const onHome = async () => {
     gameRef.current?.destroy();
     await navigate({ to: "/dashboard" });
   };
 
+  const onFightMonster = () => setPhase("monster-battle");
+
+  const submitLevelResult = useCallback(
+    async (monsterDefeated: boolean) => {
+      if (saving) return;
+      setSaving(true);
+      try {
+        const res = await complete({
+          data: { silverCollected: silverAtComplete, monsterDefeated, clientLevel: level },
+        });
+        setSavedReward({
+          goldGained: res.goldGained,
+          xpGained: res.xpGained,
+          bonusSilver: res.bonusSilver,
+          nextLevel: res.nextLevel,
+        });
+        qc.invalidateQueries({ queryKey: ["player-progress", user.id] });
+        qc.invalidateQueries({ queryKey: ["armory", user.id] });
+      } catch (e) {
+        console.error(e);
+        toast.error(e instanceof Error ? e.message : "Could not save progress.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [complete, level, qc, saving, silverAtComplete, user.id],
+  );
+
+  const onContinueNextLevel = () => {
+    setSavedReward(null);
+    setState(null);
+    gameRef.current?.destroy();
+    // Player progress was invalidated → next mount reads new level from server.
+    setPhase("loading");
+    setTimeout(() => setPhase("playing"), 500);
+  };
+
+  if (isPortrait) return <LandscapeGate />;
+
   return (
     <div className="fixed inset-0 overflow-hidden bg-background select-none">
-      {/* Loading */}
-      {phase === "loading" && <LoadingScreen />}
+      {phase === "loading" && <LoadingScreen level={level} />}
 
-      {/* Cutscene */}
-      {phase === "cutscene" && (
-        <Cutscene
-          line={CUTSCENE[cutIdx]}
-          index={cutIdx}
-          total={CUTSCENE.length}
-          onNext={() => (cutIdx < CUTSCENE.length - 1 ? setCutIdx(cutIdx + 1) : startGame())}
-          onSkip={startGame}
-        />
-      )}
-
-      {/* Game */}
-      {phase === "playing" && (
+      {phase !== "loading" && (
         <>
           <canvas
             ref={canvasRef}
@@ -125,50 +166,84 @@ function PlayPage() {
             aria-label="Surf Riders gameplay"
           />
 
-          {/* HUD */}
-          {state && state.status !== "gameover" && (
-            <Hud state={state} onPause={onPause} />
+          {state && phase === "playing" && state.status !== "gameover" && (
+            <Hud
+              state={state}
+              avatar={avatar}
+              weapon={weapon}
+              goldCoins={profile?.gold_coins ?? 0}
+              onPause={onPause}
+            />
           )}
 
-          {/* Pause */}
-          {state?.status === "paused" && (
+          {state?.status === "paused" && phase === "playing" && (
             <Overlay title="Paused" subtitle="Catch your breath, rider.">
               <OverlayButton onClick={onResume} icon={Play}>Resume</OverlayButton>
-              <OverlayButton onClick={onRestart} icon={RotateCcw} variant="ghost">Restart</OverlayButton>
+              <OverlayButton onClick={onRestartLevel} icon={RotateCcw} variant="ghost">Restart Level</OverlayButton>
               <OverlayButton onClick={onHome} icon={Home} variant="ghost">Exit</OverlayButton>
             </Overlay>
           )}
 
-          {/* Game over */}
-          {state?.status === "gameover" && (
-            <Overlay title="Wipeout" subtitle={state.bossDefeated ? "Crystal recovered!" : "The wave got you."}>
-              <div className="mb-4 grid grid-cols-3 gap-3 text-center">
-                <Stat label="Score" value={state.score.toLocaleString()} icon={Trophy} />
-                <Stat label="Coins" value={`+${state.coins}`} icon={Coins} />
-                <Stat label="Distance" value={`${state.distance}m`} icon={Zap} />
-              </div>
-              {saving && <p className="mb-3 text-xs text-muted-foreground">Saving progress…</p>}
-              {saved && (
-                <p className="mb-3 text-xs text-lagoon">
-                  High score: {saved.highest_score.toLocaleString()} • Total coins: {saved.coins.toLocaleString()}
-                </p>
-              )}
-              <OverlayButton onClick={onRestart} icon={RotateCcw}>Play again</OverlayButton>
+          {phase === "level-complete" && (
+            <LevelCompleteOverlay
+              level={level}
+              silverCollected={silverAtComplete}
+              silverTarget={silverTarget}
+              rewards={rewardsPreview}
+              onFight={onFightMonster}
+              onShop={async () => {
+                gameRef.current?.destroy();
+                await navigate({ to: "/armory" });
+              }}
+            />
+          )}
+
+          {phase === "monster-battle" && (
+            <MonsterBattle
+              level={level}
+              weapon={weapon}
+              avatar={avatar}
+              onVictory={async () => {
+                await submitLevelResult(true);
+                setPhase("monster-victory");
+              }}
+              onDefeat={async () => {
+                await submitLevelResult(false);
+                setPhase("monster-defeat");
+              }}
+            />
+          )}
+
+          {phase === "monster-victory" && savedReward && (
+            <Overlay title="Victory!" subtitle={`Level ${level} complete.`}>
+              <RewardsGrid
+                gold={savedReward.goldGained}
+                xp={savedReward.xpGained}
+                bonusSilver={savedReward.bonusSilver}
+              />
+              <OverlayButton onClick={onContinueNextLevel} icon={Play}>Play Level {savedReward.nextLevel}</OverlayButton>
+              <OverlayButton onClick={async () => { gameRef.current?.destroy(); await navigate({ to: "/armory" }); }} icon={ShoppingBag} variant="ghost">Visit Armory</OverlayButton>
               <OverlayButton onClick={onHome} icon={Home} variant="ghost">Dashboard</OverlayButton>
             </Overlay>
           )}
 
-          {/* Touch hint (first run) */}
-          {state?.status === "playing" && state.distance < 40 && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center sm:bottom-16">
-              <div className="rounded-full bg-background/70 px-4 py-2 text-xs text-foreground backdrop-blur animate-pulse">
-                Swipe to move • Tap twice to dash
-              </div>
-            </div>
+          {phase === "monster-defeat" && savedReward && (
+            <Overlay title="Defeated" subtitle="The monster prevailed. Upgrade your weapon.">
+              <RewardsGrid gold={savedReward.goldGained} xp={savedReward.xpGained} bonusSilver={0} />
+              <OverlayButton onClick={async () => { gameRef.current?.destroy(); await navigate({ to: "/armory" }); }} icon={ShoppingBag}>Visit Armory</OverlayButton>
+              <OverlayButton onClick={onRestartLevel} icon={RotateCcw} variant="ghost">Retry Level {level}</OverlayButton>
+              <OverlayButton onClick={onHome} icon={Home} variant="ghost">Dashboard</OverlayButton>
+            </Overlay>
           )}
 
-          {/* Mobile controls (visible on touch) */}
-          {state?.status === "playing" && (
+          {phase === "game-over" && (
+            <Overlay title="Wipeout" subtitle="The wave got you. Try again — progress is not lost.">
+              <OverlayButton onClick={onRestartLevel} icon={RotateCw}>Retry Level {level}</OverlayButton>
+              <OverlayButton onClick={onHome} icon={Home} variant="ghost">Dashboard</OverlayButton>
+            </Overlay>
+          )}
+
+          {phase === "playing" && state?.status === "playing" && (
             <MobileControls
               onLeft={() => dispatchKey("ArrowLeft")}
               onRight={() => dispatchKey("ArrowRight")}
@@ -187,98 +262,108 @@ function dispatchKey(key: string) {
   window.dispatchEvent(new KeyboardEvent("keydown", { key }));
 }
 
-function LoadingScreen() {
+function LandscapeGate() {
   return (
-    <div className="absolute inset-0 grid place-items-center bg-gradient-ocean">
-      <div className="text-center">
-        <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-full bg-gradient-wave shadow-glow animate-wave-pulse">
-          <Sparkles className="h-10 w-10 text-primary-foreground" />
-        </div>
-        <p className="font-display text-2xl font-extrabold text-foam">Paddling out…</p>
-        <p className="mt-2 text-sm text-muted-foreground">Loading Sunny Beach</p>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-gradient-ocean p-6 text-center">
+      <div className="glass max-w-sm rounded-3xl p-6 shadow-card">
+        <RotateCw className="mx-auto h-14 w-14 animate-float-slow text-lagoon" />
+        <h2 className="mt-4 font-display text-2xl font-extrabold text-foam">Rotate your device</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Surf Riders 2.0 is designed for landscape. Turn your phone sideways to start surfing.
+        </p>
+        <Link to="/dashboard" className="mt-6 inline-flex items-center gap-2 rounded-full glass px-4 py-2 text-xs text-foam">
+          <Home className="h-4 w-4" /> Back to dashboard
+        </Link>
       </div>
     </div>
   );
 }
 
-function Cutscene({ line, index, total, onNext, onSkip }: { line: string; index: number; total: number; onNext: () => void; onSkip: () => void }) {
+function LoadingScreen({ level }: { level: number }) {
   return (
-    <button onClick={onNext} className="absolute inset-0 grid cursor-pointer place-items-center bg-gradient-ocean text-left">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.15),transparent_60%)]" />
-      <div className="absolute right-4 top-4">
-        <span onClick={(e) => { e.stopPropagation(); onSkip(); }} className="rounded-full bg-background/40 px-4 py-2 text-xs font-semibold text-foam backdrop-blur hover:bg-background/60">
-          Skip ▸
-        </span>
-      </div>
-      <div className="max-w-xl px-6">
-        <p key={index} className="font-display text-2xl font-extrabold leading-snug text-foam animate-fade-in sm:text-4xl">
-          {line}
-        </p>
-        <div className="mt-8 flex items-center gap-2">
-          {Array.from({ length: total }).map((_, i) => (
-            <div key={i} className={`h-1.5 rounded-full transition-all ${i === index ? "w-10 bg-lagoon" : "w-4 bg-foam/30"}`} />
-          ))}
+    <div className="absolute inset-0 grid place-items-center bg-gradient-ocean">
+      <div className="text-center">
+        <div className="mx-auto mb-5 grid h-20 w-20 place-items-center rounded-full bg-gradient-wave shadow-glow animate-wave-pulse">
+          <Sparkles className="h-10 w-10 text-primary-foreground" />
         </div>
-        <p className="mt-6 text-xs text-foam/70">Tap to continue</p>
+        <p className="font-display text-2xl font-extrabold text-foam">Loading Level {level}…</p>
+        <p className="mt-2 text-sm text-muted-foreground">Preparing the wave</p>
       </div>
-    </button>
+    </div>
   );
 }
 
-function Hud({ state, onPause }: { state: GameState; onPause: () => void }) {
+function Hud({
+  state, avatar, weapon, goldCoins, onPause,
+}: {
+  state: GameState;
+  avatar: { name: string; emoji: string };
+  weapon: { name: string; icon: string; damage: number };
+  goldCoins: number;
+  onPause: () => void;
+}) {
+  const pct = Math.min(100, Math.round((state.coins / Math.max(1, state.silverTarget)) * 100));
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 p-3 sm:p-4">
-      <div className="mx-auto flex max-w-4xl items-start justify-between gap-3">
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
-          <Pill icon={Trophy} label={state.score.toLocaleString()} color="text-sunset" />
-          <Pill icon={Coins} label={String(state.coins)} color="text-sunset" />
-          <Pill icon={Zap} label={`${state.distance}m`} color="text-lagoon" />
-        </div>
-        <div className="pointer-events-auto flex items-center gap-2">
-          <Hearts count={state.health} />
-          <button onClick={onPause} aria-label="Pause" className="grid h-10 w-10 place-items-center rounded-full bg-background/70 backdrop-blur transition hover:scale-105">
-            <Pause className="h-5 w-5" />
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 p-2 sm:p-3">
+      {/* Top row: level objective */}
+      <div className="pointer-events-auto mx-auto max-w-4xl">
+        <div className="glass flex items-center gap-2 rounded-2xl px-3 py-2 shadow-card">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-wave font-display text-xs font-extrabold text-primary-foreground">
+            L{state.level}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[10px] uppercase tracking-widest text-lagoon">
+              Collect {state.silverTarget.toLocaleString()} silver to complete
+            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-background/50">
+                <div className="h-full bg-gradient-sunset transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="shrink-0 font-display text-xs font-extrabold tabular-nums text-foam">
+                {state.coins.toLocaleString()} / {state.silverTarget.toLocaleString()}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onPause}
+            aria-label="Pause"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-background/70 backdrop-blur transition hover:scale-105"
+          >
+            <Pause className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {state.combo >= 2 && (
-        <div className="pointer-events-none mx-auto mt-3 flex max-w-4xl justify-center">
-          <div className="rounded-full bg-coral/90 px-4 py-1.5 text-sm font-bold text-foam shadow-glow">
-            COMBO ×{state.combo} {state.multiplier > 1 && <span className="ml-2 opacity-80">({state.multiplier.toFixed(1)}× mult)</span>}
-          </div>
+      {/* Bottom-left compact stats + weapon */}
+      <div className="pointer-events-none mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Pill label={avatar.emoji + " " + avatar.name} />
+          <Pill icon={<Sword className="h-3.5 w-3.5 text-lagoon" />} label={`${weapon.icon} ${weapon.damage} dmg`} />
         </div>
-      )}
-
-      {state.bossActive && (
-        <div className="pointer-events-none mx-auto mt-3 flex max-w-md justify-center">
-          <div className="w-full rounded-full bg-background/70 p-2 backdrop-blur">
-            <p className="mb-1 text-center text-xs font-bold uppercase tracking-widest text-coral">Giant Crab</p>
-            <div className="h-2 overflow-hidden rounded-full bg-background">
-              <div className="h-full bg-gradient-sunset transition-all" style={{ width: `${Math.min(100, (state.bossHealth / Math.max(1, state.bossHealth + 1)) * 100)}%` }} />
-            </div>
-            <p className="mt-1 text-center text-[10px] text-muted-foreground">Dash into it!</p>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <Pill icon={<Coins className="h-3.5 w-3.5 text-slate-300" />} label={`${state.coins.toLocaleString()} Ag`} />
+          <Pill icon={<Coins className="h-3.5 w-3.5 text-sunset" />} label={`${goldCoins.toLocaleString()} Au`} />
+          <Hearts count={state.health} />
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function Pill({ icon: Icon, label, color }: { icon: React.ComponentType<{ className?: string }>; label: string; color: string }) {
+function Pill({ icon, label }: { icon?: React.ReactNode; label: string }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-full bg-background/70 px-3 py-1.5 backdrop-blur">
-      <Icon className={`h-4 w-4 ${color}`} />
-      <span className="text-sm font-bold tabular-nums">{label}</span>
+    <div className="flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 backdrop-blur">
+      {icon}
+      <span className="text-[11px] font-bold tabular-nums text-foam">{label}</span>
     </div>
   );
 }
 
 function Hearts({ count }: { count: number }) {
   return (
-    <div className="flex items-center gap-1 rounded-full bg-background/70 px-3 py-1.5 backdrop-blur">
+    <div className="flex items-center gap-0.5 rounded-full bg-background/70 px-2 py-1 backdrop-blur">
       {Array.from({ length: 3 }).map((_, i) => (
-        <Heart key={i} className={`h-4 w-4 ${i < count ? "fill-coral text-coral" : "text-muted-foreground"}`} />
+        <Heart key={i} className={`h-3.5 w-3.5 ${i < count ? "fill-coral text-coral" : "text-muted-foreground"}`} />
       ))}
     </div>
   );
@@ -286,67 +371,238 @@ function Hearts({ count }: { count: number }) {
 
 function Overlay({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 z-20 grid place-items-center bg-background/70 backdrop-blur-md animate-fade-in">
-      <div className="glass mx-4 w-full max-w-sm rounded-3xl p-6 shadow-card animate-scale-in">
-        <h2 className="text-center font-display text-3xl font-extrabold text-gradient-wave">{title}</h2>
+    <div className="absolute inset-0 z-20 grid place-items-center bg-background/70 backdrop-blur-md">
+      <div className="glass mx-4 w-full max-w-md rounded-3xl p-5 shadow-card sm:p-6">
+        <h2 className="text-center font-display text-2xl font-extrabold text-gradient-wave sm:text-3xl">{title}</h2>
         {subtitle && <p className="mt-1 text-center text-sm text-muted-foreground">{subtitle}</p>}
-        <div className="mt-5 flex flex-col gap-2">{children}</div>
+        <div className="mt-4 flex flex-col gap-2">{children}</div>
       </div>
     </div>
   );
 }
 
-function OverlayButton({ onClick, icon: Icon, variant = "primary", children }: { onClick: () => void; icon: React.ComponentType<{ className?: string }>; variant?: "primary" | "ghost"; children: React.ReactNode }) {
+function OverlayButton({
+  onClick, icon: Icon, variant = "primary", disabled, children,
+}: {
+  onClick: () => void;
+  icon: React.ComponentType<{ className?: string }>;
+  variant?: "primary" | "ghost";
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
   const cls =
     variant === "primary"
       ? "bg-gradient-wave text-primary-foreground shadow-glow hover:scale-[1.02]"
       : "bg-secondary text-foreground hover:bg-secondary/80";
   return (
-    <button onClick={onClick} className={`flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition ${cls}`}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full min-h-11 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition disabled:opacity-40 ${cls}`}
+    >
       <Icon className="h-4 w-4" />
       {children}
     </button>
   );
 }
 
-function Stat({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {
+function LevelCompleteOverlay({
+  level, silverCollected, silverTarget, rewards, onFight, onShop,
+}: {
+  level: number;
+  silverCollected: number;
+  silverTarget: number;
+  rewards: { gold: number; xp: number; bonusSilver: number };
+  onFight: () => void;
+  onShop: () => void;
+}) {
   return (
-    <div className="rounded-2xl bg-background/40 p-3">
-      <Icon className="mx-auto h-4 w-4 text-lagoon" />
-      <p className="mt-1 font-display text-lg font-extrabold">{value}</p>
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
+    <Overlay title="LEVEL COMPLETE!" subtitle={`Level ${level} silver target reached.`}>
+      <div className="rounded-2xl bg-background/40 p-3 text-center">
+        <p className="text-[10px] uppercase tracking-widest text-lagoon">Silver Coins Collected</p>
+        <p className="mt-1 font-display text-2xl font-extrabold text-foam">
+          {silverCollected.toLocaleString()} / {silverTarget.toLocaleString()}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-2xl bg-background/40 p-3">
+          <p className="text-[10px] uppercase tracking-widest text-lagoon">Gold on Victory</p>
+          <p className="mt-1 font-display text-lg font-extrabold text-sunset">+{rewards.gold}</p>
+        </div>
+        <div className="rounded-2xl bg-background/40 p-3">
+          <p className="text-[10px] uppercase tracking-widest text-lagoon">XP on Victory</p>
+          <p className="mt-1 font-display text-lg font-extrabold text-foam">+{rewards.xp}</p>
+        </div>
+      </div>
+      <p className="mt-1 text-center text-xs text-muted-foreground">Defeat the guardian monster to earn full rewards and unlock the next level.</p>
+      <OverlayButton onClick={onFight} icon={Sword}>Fight the Monster</OverlayButton>
+      <OverlayButton onClick={onShop} icon={ShoppingBag} variant="ghost">Visit Armory First</OverlayButton>
+    </Overlay>
+  );
+}
+
+function RewardsGrid({ gold, xp, bonusSilver }: { gold: number; xp: number; bonusSilver: number }) {
+  return (
+    <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="rounded-2xl bg-background/40 p-2">
+        <Coins className="mx-auto h-4 w-4 text-sunset" />
+        <p className="mt-1 font-display text-base font-extrabold text-sunset">+{gold}</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Gold</p>
+      </div>
+      <div className="rounded-2xl bg-background/40 p-2">
+        <Award className="mx-auto h-4 w-4 text-foam" />
+        <p className="mt-1 font-display text-base font-extrabold text-foam">+{xp}</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">XP</p>
+      </div>
+      <div className="rounded-2xl bg-background/40 p-2">
+        <Trophy className="mx-auto h-4 w-4 text-lagoon" />
+        <p className="mt-1 font-display text-base font-extrabold text-lagoon">+{bonusSilver}</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Bonus Ag</p>
+      </div>
     </div>
   );
 }
 
-function MobileControls({ onLeft, onRight, onJump, onSlide, onDash }: { onLeft: () => void; onRight: () => void; onJump: () => void; onSlide: () => void; onDash: () => void }) {
-  // Hidden on desktop (sm+), shown as soft on-screen pad on mobile as a fallback
+function MonsterBattle({
+  level, weapon, avatar, onVictory, onDefeat,
+}: {
+  level: number;
+  weapon: { name: string; icon: string; damage: number; speed: number };
+  avatar: { name: string; emoji: string };
+  onVictory: () => void;
+  onDefeat: () => void;
+}) {
+  const monster = monsterForLevel(level);
+  const [monsterHp, setMonsterHp] = useState(monster.hp);
+  const [playerHp, setPlayerHp] = useState(100);
+  const [flash, setFlash] = useState<"hit" | "hurt" | null>(null);
+  const settled = useRef(false);
+
+  // Monster attacks on interval
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (settled.current) return;
+      setPlayerHp((h) => {
+        const n = Math.max(0, h - monster.damage);
+        setFlash("hurt");
+        setTimeout(() => setFlash(null), 200);
+        return n;
+      });
+    }, monster.interval * 1000);
+    return () => clearInterval(iv);
+  }, [monster.damage, monster.interval]);
+
+  // Win / lose watcher
+  useEffect(() => {
+    if (settled.current) return;
+    if (monsterHp <= 0) { settled.current = true; setTimeout(onVictory, 500); }
+    else if (playerHp <= 0) { settled.current = true; setTimeout(onDefeat, 500); }
+  }, [monsterHp, playerHp, onVictory, onDefeat]);
+
+  const attack = () => {
+    if (settled.current) return;
+    const dmg = Math.round(weapon.damage * (0.9 + Math.random() * 0.2));
+    setMonsterHp((h) => Math.max(0, h - dmg));
+    setFlash("hit");
+    setTimeout(() => setFlash(null), 150);
+  };
+
+  const monsterPct = Math.round((monsterHp / monster.hp) * 100);
+  const playerPct = Math.round(playerHp);
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 grid grid-cols-3 gap-2 p-3 sm:hidden">
-      <div className="pointer-events-auto flex items-end gap-2">
-        <CtrlBtn onClick={onLeft} aria="Move left"><ArrowLeft className="h-5 w-5" /></CtrlBtn>
-        <CtrlBtn onClick={onRight} aria="Move right"><ArrowRight className="h-5 w-5" /></CtrlBtn>
+    <div className="absolute inset-0 z-30 grid place-items-center bg-background/85 backdrop-blur-md">
+      <div className={`glass mx-4 w-full max-w-lg rounded-3xl p-5 shadow-card ${flash === "hurt" ? "ring-2 ring-coral" : ""}`}>
+        <p className="text-center text-[10px] uppercase tracking-widest text-lagoon">Level {level} Monster</p>
+        <h2 className="mt-1 text-center font-display text-2xl font-extrabold text-foam">{monster.name}</h2>
+
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="text-center">
+            <div className="text-4xl">{avatar.emoji}</div>
+            <p className="mt-1 text-xs font-bold text-foam">{avatar.name}</p>
+            <Bar pct={playerPct} color="from-lagoon to-foam" />
+            <p className="mt-0.5 text-[10px] text-muted-foreground">{playerHp}/100 HP</p>
+          </div>
+          <div className="grid place-items-center text-sm font-black text-coral">VS</div>
+          <div className={`text-center transition ${flash === "hit" ? "scale-110" : ""}`}>
+            <div className="text-4xl">{monster.emoji}</div>
+            <p className="mt-1 text-xs font-bold text-foam">{monster.name}</p>
+            <Bar pct={monsterPct} color="from-coral to-sunset" />
+            <p className="mt-0.5 text-[10px] text-muted-foreground">{monsterHp}/{monster.hp} HP</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-background/40 p-3 text-center">
+          <p className="text-[10px] uppercase tracking-widest text-lagoon">Weapon</p>
+          <p className="mt-0.5 font-display text-base font-extrabold text-foam">
+            {weapon.icon} {weapon.name} · {weapon.damage} dmg
+          </p>
+        </div>
+
+        <button
+          onClick={attack}
+          className="mt-4 flex w-full min-h-14 items-center justify-center gap-2 rounded-full bg-gradient-wave px-6 py-4 font-display text-base font-extrabold text-primary-foreground shadow-glow transition active:scale-95"
+        >
+          <Zap className="h-5 w-5" /> ATTACK ({weapon.damage} dmg)
+        </button>
+        <p className="mt-2 text-center text-[10px] text-muted-foreground">
+          Tap to strike. Monster attacks every {monster.interval.toFixed(1)}s for {monster.damage} dmg.
+        </p>
       </div>
-      <div className="pointer-events-auto flex items-end justify-center">
+    </div>
+  );
+}
+
+function Bar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-background/50">
+      <div className={`h-full bg-gradient-to-r ${color} transition-all`} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+    </div>
+  );
+}
+
+function MobileControls({
+  onLeft, onRight, onJump, onSlide, onDash,
+}: {
+  onLeft: () => void;
+  onRight: () => void;
+  onJump: () => void;
+  onSlide: () => void;
+  onDash: () => void;
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-2 p-3 lg:hidden">
+      <div className="pointer-events-auto flex gap-2">
+        <CtrlBtn onClick={onLeft} aria="Move left"><ArrowLeft className="h-6 w-6" /></CtrlBtn>
+        <CtrlBtn onClick={onRight} aria="Move right"><ArrowRight className="h-6 w-6" /></CtrlBtn>
+      </div>
+      <div className="pointer-events-auto">
         <CtrlBtn onClick={onDash} aria="Dash" wide>
           <Zap className="h-5 w-5" /> Dash
         </CtrlBtn>
       </div>
-      <div className="pointer-events-auto flex items-end justify-end gap-2">
-        <CtrlBtn onClick={onSlide} aria="Slide"><ArrowDown className="h-5 w-5" /></CtrlBtn>
-        <CtrlBtn onClick={onJump} aria="Jump"><ArrowUp className="h-5 w-5" /></CtrlBtn>
+      <div className="pointer-events-auto flex gap-2">
+        <CtrlBtn onClick={onSlide} aria="Slide"><ArrowDown className="h-6 w-6" /></CtrlBtn>
+        <CtrlBtn onClick={onJump} aria="Jump"><ArrowUp className="h-6 w-6" /></CtrlBtn>
       </div>
     </div>
   );
 }
 
-function CtrlBtn({ onClick, aria, wide, children }: { onClick: () => void; aria: string; wide?: boolean; children: React.ReactNode }) {
+function CtrlBtn({
+  onClick, aria, wide, children,
+}: {
+  onClick: () => void;
+  aria: string;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <button
       aria-label={aria}
       onTouchStart={(e) => { e.preventDefault(); onClick(); }}
       onClick={onClick}
-      className={`flex h-12 ${wide ? "px-4" : "w-12"} items-center justify-center gap-1.5 rounded-full bg-background/70 text-sm font-bold text-foam backdrop-blur active:scale-95`}
+      className={`flex h-14 ${wide ? "px-5" : "w-14"} items-center justify-center gap-1.5 rounded-full bg-background/70 text-sm font-bold text-foam backdrop-blur active:scale-95`}
     >
       {children}
     </button>
