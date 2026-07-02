@@ -11,7 +11,9 @@ export type GameState = {
   status: GameStatus;
   score: number;
   distance: number; // meters
-  coins: number;
+  coins: number; // silver coins collected this run
+  silverTarget: number; // required silver to complete level
+  level: number;
   combo: number;
   comboTimer: number; // seconds remaining
   multiplier: number;
@@ -24,12 +26,16 @@ export type GameState = {
 export type GameCallbacks = {
   onStateChange: (s: GameState) => void;
   onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
+  onLevelComplete?: (silver: number, level: number) => void;
 };
 
 export type GameOptions = {
   theme?: WorldTheme;
   touchSensitivity?: number; // 0.5..2 (default 1)
   reduceMotion?: boolean;
+  level?: number;
+  silverTarget?: number;
+  disableBoss?: boolean;
 };
 
 
