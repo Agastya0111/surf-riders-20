@@ -214,6 +214,27 @@ export type Database = {
         }
         Relationships: []
       }
+      owned_weapons: {
+        Row: {
+          acquired_at: string
+          id: string
+          user_id: string
+          weapon_key: string
+        }
+        Insert: {
+          acquired_at?: string
+          id?: string
+          user_id: string
+          weapon_key: string
+        }
+        Update: {
+          acquired_at?: string
+          id?: string
+          user_id?: string
+          weapon_key?: string
+        }
+        Relationships: []
+      }
       player_progress: {
         Row: {
           best_distance: number
@@ -321,10 +342,15 @@ export type Database = {
           avatar_url: string | null
           coins: number
           created_at: string
+          current_level: number
           current_world: string
+          equipped_weapon: string | null
           gems: number
+          gold_coins: number
           highest_score: number
           id: string
+          selected_avatar: string
+          silver_coins: number
           updated_at: string
           username: string
         }
@@ -332,10 +358,15 @@ export type Database = {
           avatar_url?: string | null
           coins?: number
           created_at?: string
+          current_level?: number
           current_world?: string
+          equipped_weapon?: string | null
           gems?: number
+          gold_coins?: number
           highest_score?: number
           id: string
+          selected_avatar?: string
+          silver_coins?: number
           updated_at?: string
           username: string
         }
@@ -343,10 +374,15 @@ export type Database = {
           avatar_url?: string | null
           coins?: number
           created_at?: string
+          current_level?: number
           current_world?: string
+          equipped_weapon?: string | null
           gems?: number
+          gold_coins?: number
           highest_score?: number
           id?: string
+          selected_avatar?: string
+          silver_coins?: number
           updated_at?: string
           username?: string
         }
