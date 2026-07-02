@@ -517,13 +517,13 @@ export class SurfGame {
       }
       p.collected = true;
       if (p.type === "coin") {
-        this.state.coins += 1;
+        this.state.coins += 50; // silver per coin
         this.state.combo += 1;
         this.state.comboTimer = 2.2;
         this.scoreFloat += 10 * this.state.multiplier;
         this.burst(this.w / 2, this.h * 0.62, "#ffd166");
       } else {
-        this.state.coins += 25;
+        this.state.coins += 500; // silver per chest
         this.state.combo += 5;
         this.state.comboTimer = 2.5;
         this.scoreFloat += 200;
