@@ -130,6 +130,8 @@ export class SurfGame {
     score: 0,
     distance: 0,
     coins: 0,
+    silverTarget: 5000,
+    level: 1,
     combo: 0,
     comboTimer: 0,
     multiplier: 1,
@@ -138,6 +140,9 @@ export class SurfGame {
     bossActive: false,
     bossDefeated: false,
   };
+
+  private disableBoss = false;
+  private levelCompleteEmitted = false;
 
   constructor(canvas: HTMLCanvasElement, cb: GameCallbacks, opts: GameOptions = {}) {
     this.canvas = canvas;
@@ -149,6 +154,12 @@ export class SurfGame {
     this.touchSens = opts.touchSensitivity ?? 1;
     this.reduceMotion = opts.reduceMotion ?? false;
     this.state.bossHealth = this.theme.bossHp;
+    this.state.level = Math.max(1, opts.level ?? 1);
+    this.state.silverTarget = Math.max(1, opts.silverTarget ?? 5000);
+    this.disableBoss = opts.disableBoss ?? true; // level flow uses post-level monster
+    // Difficulty scales with level
+    this.speed = 14 + (this.state.level - 1) * 0.8;
+    this.targetSpeed = this.speed;
     this.resize();
     this.bindInput();
   }
