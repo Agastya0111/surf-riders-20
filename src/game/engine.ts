@@ -203,8 +203,8 @@ export class SurfGame {
     this.slideTimer = 0;
     this.dashTimer = 0;
     this.invuln = 0;
-    this.speed = 14;
-    this.targetSpeed = 14;
+    this.speed = 14 + (this.state.level - 1) * 0.8;
+    this.targetSpeed = this.speed;
     this.obstacles = [];
     this.pickups = [];
     this.particles = [];
@@ -215,16 +215,19 @@ export class SurfGame {
     this.nextChestAt = 250;
     this.bossSpawned = false;
     this.bossHits = 0;
+    this.levelCompleteEmitted = false;
     this.state = {
       status: "playing",
       score: 0,
       distance: 0,
       coins: 0,
+      silverTarget: this.state.silverTarget,
+      level: this.state.level,
       combo: 0,
       comboTimer: 0,
       multiplier: 1,
       health: 3,
-      bossHealth: 6,
+      bossHealth: this.theme.bossHp,
       bossActive: false,
       bossDefeated: false,
     };
