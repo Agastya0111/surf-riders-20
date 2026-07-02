@@ -427,8 +427,8 @@ export class SurfGame {
     for (const o of this.obstacles) o.z -= this.speed * dt;
     for (const p of this.pickups) p.z -= this.speed * dt;
 
-    // boss trigger at 600m, or every 800m after defeat (endless)
-    if (!this.bossSpawned && this.distFloat >= 600) {
+    // boss trigger (disabled by default in level flow — post-level monster battles handle bosses)
+    if (!this.disableBoss && !this.bossSpawned && this.distFloat >= 600) {
       this.bossSpawned = true;
       this.state.bossActive = true;
       this.state.bossHealth = this.theme.bossHp;
@@ -439,6 +439,16 @@ export class SurfGame {
       this.bossAttackTimer = 2;
       this.targetSpeed = 12;
       this.emit();
+    }
+
+    // Level complete: silver target reached → auto-pause and fire callback
+    if (!this.levelCompleteEmitted && this.state.coins >= this.state.silverTarget) {
+      this.levelCompleteEmitted = true;
+      this.state.status = "paused";
+      this.emit();
+      this.cb.onLevelComplete?.(this.state.coins, this.state.level);
+      cancelAnimationFrame(this.raf);
+      return;
     }
 
 
