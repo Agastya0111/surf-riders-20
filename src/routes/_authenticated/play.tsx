@@ -208,6 +208,10 @@ function PlayPage() {
               rewards={rewardsPreview}
               onFight={onFightMonster}
               onShop={async () => {
+                sessionStorage.setItem(
+                  "sr2:play-state",
+                  JSON.stringify({ phase: "level-complete", silverAtComplete, level }),
+                );
                 gameRef.current?.destroy();
                 await navigate({ to: "/armory" });
               }}
