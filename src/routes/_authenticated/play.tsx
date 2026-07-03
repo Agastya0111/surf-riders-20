@@ -341,7 +341,7 @@ function Hud({
           <Pill icon={<Sword className="h-3.5 w-3.5 text-lagoon" />} label={`${weapon.icon} ${weapon.damage} dmg`} />
         </div>
         <div className="flex items-center gap-1.5">
-          <Pill icon={<Coins className="h-3.5 w-3.5 text-slate-300" />} label={`${state.coins.toLocaleString()} Ag`} />
+          <Pill icon={<Coins className="h-3.5 w-3.5 text-amber-300 drop-shadow-[0_0_4px_rgba(255,220,120,0.9)]" />} label={`${state.coins.toLocaleString()} Ag`} />
           <Pill icon={<Coins className="h-3.5 w-3.5 text-sunset" />} label={`${goldCoins.toLocaleString()} Au`} />
           <Hearts count={state.health} />
         </div>
