@@ -57,22 +57,38 @@ function PlayPage() {
   // Landscape gate
   const [isPortrait, setIsPortrait] = useState(false);
   useEffect(() => {
-    const check = () => setIsPortrait(window.innerHeight > window.innerWidth && window.innerWidth < 900);
+    const check = () => setIsPortrait(window.innerHeight > window.innerWidth);
     check();
     window.addEventListener("resize", check);
     window.addEventListener("orientationchange", check);
+    // Best-effort orientation lock (only works on mobile fullscreen; ignore failures)
+    const so = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
+    so?.lock?.("landscape").catch(() => {});
     return () => {
       window.removeEventListener("resize", check);
       window.removeEventListener("orientationchange", check);
     };
   }, []);
 
-  // Loading → playing
+  // Restore preserved post-level state when returning from armory/shop
+  const RESTORE_KEY = "sr2:play-state";
   useEffect(() => {
     if (!progress) return;
+    try {
+      const raw = sessionStorage.getItem(RESTORE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as { phase: Phase; silverAtComplete: number; level: number };
+        sessionStorage.removeItem(RESTORE_KEY);
+        if (saved.level === level && (saved.phase === "level-complete" || saved.phase === "monster-battle")) {
+          setSilverAtComplete(saved.silverAtComplete);
+          setPhase(saved.phase);
+          return;
+        }
+      }
+    } catch { /* ignore */ }
     const t = setTimeout(() => setPhase("playing"), 700);
     return () => clearTimeout(t);
-  }, [progress]);
+  }, [progress, level]);
 
   const startEngine = useCallback(() => {
     if (!canvasRef.current) return;
@@ -192,6 +208,10 @@ function PlayPage() {
               rewards={rewardsPreview}
               onFight={onFightMonster}
               onShop={async () => {
+                sessionStorage.setItem(
+                  "sr2:play-state",
+                  JSON.stringify({ phase: "level-complete", silverAtComplete, level }),
+                );
                 gameRef.current?.destroy();
                 await navigate({ to: "/armory" });
               }}
@@ -341,7 +361,7 @@ function Hud({
           <Pill icon={<Sword className="h-3.5 w-3.5 text-lagoon" />} label={`${weapon.icon} ${weapon.damage} dmg`} />
         </div>
         <div className="flex items-center gap-1.5">
-          <Pill icon={<Coins className="h-3.5 w-3.5 text-slate-300" />} label={`${state.coins.toLocaleString()} Ag`} />
+          <Pill icon={<Coins className="h-3.5 w-3.5 text-amber-300 drop-shadow-[0_0_4px_rgba(255,220,120,0.9)]" />} label={`${state.coins.toLocaleString()} Ag`} />
           <Pill icon={<Coins className="h-3.5 w-3.5 text-sunset" />} label={`${goldCoins.toLocaleString()} Au`} />
           <Hearts count={state.health} />
         </div>
@@ -518,14 +538,19 @@ function MonsterBattle({
 
         <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <div className="text-center">
-            <div className="text-4xl">{avatar.emoji}</div>
+            <div className="text-5xl animate-[bounce_1.6s_ease-in-out_infinite]">{avatar.emoji}</div>
             <p className="mt-1 text-xs font-bold text-foam">{avatar.name}</p>
             <Bar pct={playerPct} color="from-lagoon to-foam" />
             <p className="mt-0.5 text-[10px] text-muted-foreground">{playerHp}/100 HP</p>
           </div>
-          <div className="grid place-items-center text-sm font-black text-coral">VS</div>
-          <div className={`text-center transition ${flash === "hit" ? "scale-110" : ""}`}>
-            <div className="text-4xl">{monster.emoji}</div>
+          <div className="grid place-items-center text-sm font-black text-coral animate-pulse">VS</div>
+          <div className={`text-center transition-transform duration-150 ${flash === "hit" ? "scale-125 -translate-x-1" : ""}`}>
+            <div
+              className={`text-5xl inline-block ${flash === "hit" ? "" : "animate-[wiggle_0.9s_ease-in-out_infinite]"}`}
+              style={{ filter: flash === "hit" ? "brightness(1.6) saturate(1.6)" : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))" }}
+            >
+              {monster.emoji}
+            </div>
             <p className="mt-1 text-xs font-bold text-foam">{monster.name}</p>
             <Bar pct={monsterPct} color="from-coral to-sunset" />
             <p className="mt-0.5 text-[10px] text-muted-foreground">{monsterHp}/{monster.hp} HP</p>

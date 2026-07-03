@@ -144,6 +144,12 @@
   0%, 100% { opacity: 0.5; transform: scale(1); }
   50% { opacity: 0.8; transform: scale(1.05); }
 }
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-8deg) translateY(0); }
+  25% { transform: rotate(6deg) translateY(-4px); }
+  50% { transform: rotate(-4deg) translateY(2px); }
+  75% { transform: rotate(8deg) translateY(-3px); }
+}
 
 @utility animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
 @utility animate-wave-pulse { animation: wave-pulse 4s ease-in-out infinite; }

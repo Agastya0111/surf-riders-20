@@ -190,6 +190,8 @@ export class SurfGame {
     this.state.status = "playing";
     this.last = performance.now();
     this.emit();
+    cancelAnimationFrame(this.raf);
+    this.raf = requestAnimationFrame(this.loop);
   }
 
   restart() {
@@ -1029,13 +1031,33 @@ export class SurfGame {
     if (s < 0.04) return;
     if (p.type === "coin") {
       const spin = Math.sin(this.bob + p.z) * 0.9;
-      ctx.fillStyle = "#ffd166";
+      const cx = pr.x;
+      const cy = pr.y - 32 * s;
+      const rx = Math.max(3, 18 * s * Math.abs(Math.cos(spin)));
+      const ry = 18 * s;
+      // Bright halo so coins never look grey against the water
+      ctx.save();
+      ctx.shadowColor = "rgba(255, 245, 200, 0.95)";
+      ctx.shadowBlur = 18 * s;
+      const grad = ctx.createRadialGradient(cx - rx * 0.3, cy - ry * 0.3, 1, cx, cy, Math.max(rx, ry));
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(0.45, "#ffe27a");
+      grad.addColorStop(1, "#ff9d1c");
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.ellipse(pr.x, pr.y - 28 * s, Math.max(2, 14 * s * Math.abs(Math.cos(spin))), 14 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "#b8860b";
-      ctx.lineWidth = Math.max(1, 2 * s);
+      ctx.restore();
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineWidth = Math.max(1.5, 2.5 * s);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
+      // inner shine
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.ellipse(cx - rx * 0.3, cy - ry * 0.3, rx * 0.25, ry * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       // chest
       ctx.fillStyle = "#8b5a2b";
