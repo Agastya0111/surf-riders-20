@@ -57,22 +57,38 @@ function PlayPage() {
   // Landscape gate
   const [isPortrait, setIsPortrait] = useState(false);
   useEffect(() => {
-    const check = () => setIsPortrait(window.innerHeight > window.innerWidth && window.innerWidth < 900);
+    const check = () => setIsPortrait(window.innerHeight > window.innerWidth);
     check();
     window.addEventListener("resize", check);
     window.addEventListener("orientationchange", check);
+    // Best-effort orientation lock (only works on mobile fullscreen; ignore failures)
+    const so = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
+    so?.lock?.("landscape").catch(() => {});
     return () => {
       window.removeEventListener("resize", check);
       window.removeEventListener("orientationchange", check);
     };
   }, []);
 
-  // Loading → playing
+  // Restore preserved post-level state when returning from armory/shop
+  const RESTORE_KEY = "sr2:play-state";
   useEffect(() => {
     if (!progress) return;
+    try {
+      const raw = sessionStorage.getItem(RESTORE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as { phase: Phase; silverAtComplete: number; level: number };
+        sessionStorage.removeItem(RESTORE_KEY);
+        if (saved.level === level && (saved.phase === "level-complete" || saved.phase === "monster-battle")) {
+          setSilverAtComplete(saved.silverAtComplete);
+          setPhase(saved.phase);
+          return;
+        }
+      }
+    } catch { /* ignore */ }
     const t = setTimeout(() => setPhase("playing"), 700);
     return () => clearTimeout(t);
-  }, [progress]);
+  }, [progress, level]);
 
   const startEngine = useCallback(() => {
     if (!canvasRef.current) return;
