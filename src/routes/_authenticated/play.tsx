@@ -52,7 +52,9 @@ function PlayPage() {
   const [silverAtComplete, setSilverAtComplete] = useState(0);
   const [rewardsPreview] = useState(() => levelRewards(level));
   const [saving, setSaving] = useState(false);
+  const [runId, setRunId] = useState(0);
   const [savedReward, setSavedReward] = useState<null | { goldGained: number; xpGained: number; bonusSilver: number; nextLevel: number }>(null);
+
 
   // Landscape gate
   const [isPortrait, setIsPortrait] = useState(false);
