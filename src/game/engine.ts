@@ -190,6 +190,8 @@ export class SurfGame {
     this.state.status = "playing";
     this.last = performance.now();
     this.emit();
+    cancelAnimationFrame(this.raf);
+    this.raf = requestAnimationFrame(this.loop);
   }
 
   restart() {
