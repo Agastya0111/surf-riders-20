@@ -538,14 +538,19 @@ function MonsterBattle({
 
         <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <div className="text-center">
-            <div className="text-4xl">{avatar.emoji}</div>
+            <div className="text-5xl animate-[bounce_1.6s_ease-in-out_infinite]">{avatar.emoji}</div>
             <p className="mt-1 text-xs font-bold text-foam">{avatar.name}</p>
             <Bar pct={playerPct} color="from-lagoon to-foam" />
             <p className="mt-0.5 text-[10px] text-muted-foreground">{playerHp}/100 HP</p>
           </div>
-          <div className="grid place-items-center text-sm font-black text-coral">VS</div>
-          <div className={`text-center transition ${flash === "hit" ? "scale-110" : ""}`}>
-            <div className="text-4xl">{monster.emoji}</div>
+          <div className="grid place-items-center text-sm font-black text-coral animate-pulse">VS</div>
+          <div className={`text-center transition-transform duration-150 ${flash === "hit" ? "scale-125 -translate-x-1" : ""}`}>
+            <div
+              className={`text-5xl inline-block ${flash === "hit" ? "" : "animate-[wiggle_0.9s_ease-in-out_infinite]"}`}
+              style={{ filter: flash === "hit" ? "brightness(1.6) saturate(1.6)" : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))" }}
+            >
+              {monster.emoji}
+            </div>
             <p className="mt-1 text-xs font-bold text-foam">{monster.name}</p>
             <Bar pct={monsterPct} color="from-coral to-sunset" />
             <p className="mt-0.5 text-[10px] text-muted-foreground">{monsterHp}/{monster.hp} HP</p>
