@@ -117,7 +117,8 @@ function PlayPage() {
     if (phase !== "playing" || !canvasRef.current) return;
     startEngine();
     return () => gameRef.current?.destroy();
-  }, [phase, startEngine]);
+    // runId forces a fresh engine on Restart Level even when phase is already "playing".
+  }, [phase, startEngine, runId]);
 
   const onPause = () => gameRef.current?.pause();
   const onResume = () => gameRef.current?.resume();
@@ -125,12 +126,15 @@ function PlayPage() {
     setSavedReward(null);
     setState(null);
     gameRef.current?.destroy();
+    gameRef.current = null;
     setPhase("playing");
+    setRunId((n) => n + 1);
   };
   const onHome = async () => {
     gameRef.current?.destroy();
     await navigate({ to: "/dashboard" });
   };
+
 
   const onFightMonster = () => setPhase("monster-battle");
 
