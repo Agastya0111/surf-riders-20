@@ -246,12 +246,15 @@ export class SurfGame {
   resize() {
     const rect = this.canvas.getBoundingClientRect();
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.w = Math.max(320, rect.width);
-    this.h = Math.max(480, rect.height);
+    // Fill the container exactly — no min clamps that would force portrait
+    // aspect on short landscape viewports (e.g. phones held sideways).
+    this.w = Math.max(1, rect.width || window.innerWidth);
+    this.h = Math.max(1, rect.height || window.innerHeight);
     this.canvas.width = Math.floor(this.w * this.dpr);
     this.canvas.height = Math.floor(this.h * this.dpr);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
+
 
   // ---------- input ----------
   private keyHandler = (e: KeyboardEvent) => {
