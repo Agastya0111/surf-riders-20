@@ -164,6 +164,7 @@ export class SurfGame {
     this.state.level = Math.max(1, opts.level ?? 1);
     this.state.silverTarget = Math.max(1, opts.silverTarget ?? 5000);
     this.disableBoss = opts.disableBoss ?? true; // level flow uses post-level monster
+    this.state.shieldActive = !!opts.startWithShield;
     // Difficulty scales with level
     this.speed = 14 + (this.state.level - 1) * 0.8;
     this.targetSpeed = this.speed;
@@ -230,12 +231,14 @@ export class SurfGame {
       score: 0,
       distance: 0,
       coins: 0,
+      goldRun: 0,
       silverTarget: this.state.silverTarget,
       level: this.state.level,
       combo: 0,
       comboTimer: 0,
       multiplier: 1,
       health: 3,
+      shieldActive: this.state.shieldActive,
       bossHealth: this.theme.bossHp,
       bossActive: false,
       bossDefeated: false,
@@ -461,7 +464,7 @@ export class SurfGame {
       this.levelCompleteEmitted = true;
       this.state.status = "paused";
       this.emit();
-      this.cb.onLevelComplete?.(this.state.coins, this.state.level);
+      this.cb.onLevelComplete?.(this.state.coins, this.state.level, this.state.goldRun);
       cancelAnimationFrame(this.raf);
       return;
     }
