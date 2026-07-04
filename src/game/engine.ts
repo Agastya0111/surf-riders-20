@@ -1294,6 +1294,29 @@ export class SurfGame {
       }
     }
 
+    // Active shield bubble around the player
+    if (this.state.shieldActive) {
+      ctx.save();
+      const pulse = 0.5 + 0.5 * Math.sin(this.bob * 2);
+      const r = 46 + pulse * 4;
+      ctx.shadowColor = "rgba(120,200,255,0.9)";
+      ctx.shadowBlur = 22;
+      const g = ctx.createRadialGradient(x, y - 24, r * 0.2, x, y - 24, r);
+      g.addColorStop(0, "rgba(220,240,255,0.05)");
+      g.addColorStop(0.7, "rgba(120,200,255,0.28)");
+      g.addColorStop(1, "rgba(60,140,220,0.55)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y - 24, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(180,225,255,${0.6 + pulse * 0.3})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x, y - 24, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.globalAlpha = 1;
   }
 }
