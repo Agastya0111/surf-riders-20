@@ -12,12 +12,14 @@ export type GameState = {
   score: number;
   distance: number; // meters
   coins: number; // silver coins collected this run
+  goldRun: number; // gold coins collected this run (from chests / gold pickups)
   silverTarget: number; // required silver to complete level
   level: number;
   combo: number;
   comboTimer: number; // seconds remaining
   multiplier: number;
   health: number;
+  shieldActive: boolean;
   bossHealth: number;
   bossActive: boolean;
   bossDefeated: boolean;
@@ -26,7 +28,8 @@ export type GameState = {
 export type GameCallbacks = {
   onStateChange: (s: GameState) => void;
   onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
-  onLevelComplete?: (silver: number, level: number) => void;
+  onLevelComplete?: (silver: number, level: number, goldRun: number) => void;
+  onShieldConsumed?: () => void;
 };
 
 export type GameOptions = {
@@ -36,6 +39,7 @@ export type GameOptions = {
   level?: number;
   silverTarget?: number;
   disableBoss?: boolean;
+  startWithShield?: boolean;
 };
 
 
@@ -50,12 +54,13 @@ type Obstacle = {
 };
 
 type Pickup = {
-  type: "coin" | "chest";
+  type: "coin" | "chest" | "gold" | "shield";
   lane: Lane;
   z: number;
   y: number; // vertical offset (for arcs)
   collected: boolean;
 };
+
 
 const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
 const ROAD_HALF_WIDTH = 1.6; // world units
@@ -130,12 +135,14 @@ export class SurfGame {
     score: 0,
     distance: 0,
     coins: 0,
+    goldRun: 0,
     silverTarget: 5000,
     level: 1,
     combo: 0,
     comboTimer: 0,
     multiplier: 1,
     health: 3,
+    shieldActive: false,
     bossHealth: 6,
     bossActive: false,
     bossDefeated: false,
@@ -157,6 +164,7 @@ export class SurfGame {
     this.state.level = Math.max(1, opts.level ?? 1);
     this.state.silverTarget = Math.max(1, opts.silverTarget ?? 5000);
     this.disableBoss = opts.disableBoss ?? true; // level flow uses post-level monster
+    this.state.shieldActive = !!opts.startWithShield;
     // Difficulty scales with level
     this.speed = 14 + (this.state.level - 1) * 0.8;
     this.targetSpeed = this.speed;
@@ -223,12 +231,14 @@ export class SurfGame {
       score: 0,
       distance: 0,
       coins: 0,
+      goldRun: 0,
       silverTarget: this.state.silverTarget,
       level: this.state.level,
       combo: 0,
       comboTimer: 0,
       multiplier: 1,
       health: 3,
+      shieldActive: this.state.shieldActive,
       bossHealth: this.theme.bossHp,
       bossActive: false,
       bossDefeated: false,
@@ -454,7 +464,7 @@ export class SurfGame {
       this.levelCompleteEmitted = true;
       this.state.status = "paused";
       this.emit();
-      this.cb.onLevelComplete?.(this.state.coins, this.state.level);
+      this.cb.onLevelComplete?.(this.state.coins, this.state.level, this.state.goldRun);
       cancelAnimationFrame(this.raf);
       return;
     }
@@ -529,13 +539,25 @@ export class SurfGame {
         this.state.combo += 1;
         this.state.comboTimer = 2.2;
         this.scoreFloat += 10 * this.state.multiplier;
-        this.burst(this.w / 2, this.h * 0.62, "#ffd166");
-      } else {
-        this.state.coins += 500; // silver per chest
+        this.burst(this.w / 2, this.h * 0.62, "#e6ecf5");
+      } else if (p.type === "gold") {
+        this.state.goldRun += 10; // in-run gold coin
+        this.state.combo += 2;
+        this.state.comboTimer = 2.5;
+        this.scoreFloat += 30 * this.state.multiplier;
+        this.burst(this.w / 2, this.h * 0.6, "#ffb86b");
+      } else if (p.type === "chest") {
+        this.state.coins += 500;    // silver chest bonus
+        this.state.goldRun += 25;   // treasure chest also drops gold
         this.state.combo += 5;
         this.state.comboTimer = 2.5;
         this.scoreFloat += 200;
         this.burst(this.w / 2, this.h * 0.6, "#ffb86b");
+      } else if (p.type === "shield") {
+        if (!this.state.shieldActive) {
+          this.state.shieldActive = true;
+          this.burst(this.w / 2, this.h * 0.62, "#7ad0ff");
+        }
       }
       this.emit();
     }
@@ -570,13 +592,23 @@ export class SurfGame {
 
   private spawnPickupRow() {
     const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
-    // chest occasionally
+    // Chest occasionally (silver + gold burst)
     if (this.distFloat >= this.nextChestAt) {
       this.nextChestAt += 220 + Math.random() * 180;
       this.pickups.push({ type: "chest", lane, z: FAR_Z, y: 0, collected: false });
       return;
     }
-    // line of 3-5 coins, maybe arcing
+    // Rare shield pickup (~4% of rows, at most once every ~30s of world distance)
+    if (Math.random() < 0.04) {
+      this.pickups.push({ type: "shield", lane, z: FAR_Z, y: 0.6, collected: false });
+      return;
+    }
+    // Occasional single gold coin (~10% of rows)
+    if (Math.random() < 0.1) {
+      this.pickups.push({ type: "gold", lane, z: FAR_Z, y: 0.4, collected: false });
+      return;
+    }
+    // line of 3-5 silver coins, maybe arcing
     const count = 3 + Math.floor(Math.random() * 3);
     const arc = Math.random() < 0.3;
     for (let i = 0; i < count; i++) {
@@ -585,7 +617,17 @@ export class SurfGame {
     }
   }
 
+
   private takeHit() {
+    // Shield absorbs one hit, then breaks.
+    if (this.state.shieldActive) {
+      this.state.shieldActive = false;
+      this.invuln = 1.0;
+      this.burst(this.w / 2, this.h * 0.7, "#7ad0ff");
+      this.cb.onShieldConsumed?.();
+      this.emit();
+      return;
+    }
     this.state.health -= 1;
     this.state.combo = 0;
     this.state.comboTimer = 0;
@@ -1032,35 +1074,69 @@ export class SurfGame {
     const pr = this.project(p.z, LANE_OFFSETS[p.lane], p.y);
     const s = pr.scale;
     if (s < 0.04) return;
-    if (p.type === "coin") {
+    if (p.type === "coin" || p.type === "gold") {
       const spin = Math.sin(this.bob + p.z) * 0.9;
       const cx = pr.x;
       const cy = pr.y - 32 * s;
       const rx = Math.max(3, 18 * s * Math.abs(Math.cos(spin)));
       const ry = 18 * s;
-      // Bright halo so coins never look grey against the water
+      const isGold = p.type === "gold";
       ctx.save();
-      ctx.shadowColor = "rgba(255, 245, 200, 0.95)";
+      ctx.shadowColor = isGold ? "rgba(255,210,90,0.95)" : "rgba(220,235,255,0.95)";
       ctx.shadowBlur = 18 * s;
       const grad = ctx.createRadialGradient(cx - rx * 0.3, cy - ry * 0.3, 1, cx, cy, Math.max(rx, ry));
-      grad.addColorStop(0, "#ffffff");
-      grad.addColorStop(0.45, "#ffe27a");
-      grad.addColorStop(1, "#ff9d1c");
+      if (isGold) {
+        grad.addColorStop(0, "#ffffff");
+        grad.addColorStop(0.45, "#ffdd66");
+        grad.addColorStop(1, "#f59300");
+      } else {
+        // SILVER — cool white → pale silver → steel blue-grey
+        grad.addColorStop(0, "#ffffff");
+        grad.addColorStop(0.5, "#e6ecf5");
+        grad.addColorStop(1, "#8ea1b8");
+      }
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      ctx.strokeStyle = "#1a1a1a";
+      ctx.strokeStyle = isGold ? "#7a4700" : "#3a4a5c";
       ctx.lineWidth = Math.max(1.5, 2.5 * s);
       ctx.beginPath();
       ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // inner shine
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
       ctx.ellipse(cx - rx * 0.3, cy - ry * 0.3, rx * 0.25, ry * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
+    } else if (p.type === "shield") {
+      // Glowing blue shield bubble pickup
+      const cx = pr.x;
+      const cy = pr.y - 36 * s;
+      const r = 22 * s;
+      ctx.save();
+      ctx.shadowColor = "rgba(120,200,255,0.95)";
+      ctx.shadowBlur = 24 * s;
+      const g = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+      g.addColorStop(0, "rgba(220,240,255,0.95)");
+      g.addColorStop(0.6, "rgba(120,200,255,0.55)");
+      g.addColorStop(1, "rgba(60,140,220,0.15)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = "rgba(180,225,255,0.95)";
+      ctx.lineWidth = Math.max(1.5, 2 * s);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // little shield glyph
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.font = `${Math.max(10, 20 * s)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🛡", cx, cy + 1);
     } else {
       // chest
       ctx.fillStyle = "#8b5a2b";
@@ -1216,6 +1292,29 @@ export class SurfGame {
         ctx.ellipse(x - i * 20, y + 10, 54 - i * 6, 11, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    // Active shield bubble around the player
+    if (this.state.shieldActive) {
+      ctx.save();
+      const pulse = 0.5 + 0.5 * Math.sin(this.bob * 2);
+      const r = 46 + pulse * 4;
+      ctx.shadowColor = "rgba(120,200,255,0.9)";
+      ctx.shadowBlur = 22;
+      const g = ctx.createRadialGradient(x, y - 24, r * 0.2, x, y - 24, r);
+      g.addColorStop(0, "rgba(220,240,255,0.05)");
+      g.addColorStop(0.7, "rgba(120,200,255,0.28)");
+      g.addColorStop(1, "rgba(60,140,220,0.55)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y - 24, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(180,225,255,${0.6 + pulse * 0.3})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x, y - 24, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     ctx.globalAlpha = 1;
