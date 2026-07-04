@@ -1074,35 +1074,69 @@ export class SurfGame {
     const pr = this.project(p.z, LANE_OFFSETS[p.lane], p.y);
     const s = pr.scale;
     if (s < 0.04) return;
-    if (p.type === "coin") {
+    if (p.type === "coin" || p.type === "gold") {
       const spin = Math.sin(this.bob + p.z) * 0.9;
       const cx = pr.x;
       const cy = pr.y - 32 * s;
       const rx = Math.max(3, 18 * s * Math.abs(Math.cos(spin)));
       const ry = 18 * s;
-      // Bright halo so coins never look grey against the water
+      const isGold = p.type === "gold";
       ctx.save();
-      ctx.shadowColor = "rgba(255, 245, 200, 0.95)";
+      ctx.shadowColor = isGold ? "rgba(255,210,90,0.95)" : "rgba(220,235,255,0.95)";
       ctx.shadowBlur = 18 * s;
       const grad = ctx.createRadialGradient(cx - rx * 0.3, cy - ry * 0.3, 1, cx, cy, Math.max(rx, ry));
-      grad.addColorStop(0, "#ffffff");
-      grad.addColorStop(0.45, "#ffe27a");
-      grad.addColorStop(1, "#ff9d1c");
+      if (isGold) {
+        grad.addColorStop(0, "#ffffff");
+        grad.addColorStop(0.45, "#ffdd66");
+        grad.addColorStop(1, "#f59300");
+      } else {
+        // SILVER — cool white → pale silver → steel blue-grey
+        grad.addColorStop(0, "#ffffff");
+        grad.addColorStop(0.5, "#e6ecf5");
+        grad.addColorStop(1, "#8ea1b8");
+      }
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      ctx.strokeStyle = "#1a1a1a";
+      ctx.strokeStyle = isGold ? "#7a4700" : "#3a4a5c";
       ctx.lineWidth = Math.max(1.5, 2.5 * s);
       ctx.beginPath();
       ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // inner shine
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
       ctx.ellipse(cx - rx * 0.3, cy - ry * 0.3, rx * 0.25, ry * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
+    } else if (p.type === "shield") {
+      // Glowing blue shield bubble pickup
+      const cx = pr.x;
+      const cy = pr.y - 36 * s;
+      const r = 22 * s;
+      ctx.save();
+      ctx.shadowColor = "rgba(120,200,255,0.95)";
+      ctx.shadowBlur = 24 * s;
+      const g = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+      g.addColorStop(0, "rgba(220,240,255,0.95)");
+      g.addColorStop(0.6, "rgba(120,200,255,0.55)");
+      g.addColorStop(1, "rgba(60,140,220,0.15)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = "rgba(180,225,255,0.95)";
+      ctx.lineWidth = Math.max(1.5, 2 * s);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // little shield glyph
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.font = `${Math.max(10, 20 * s)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🛡", cx, cy + 1);
     } else {
       // chest
       ctx.fillStyle = "#8b5a2b";
