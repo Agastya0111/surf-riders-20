@@ -350,6 +350,7 @@ export type Database = {
           highest_score: number
           id: string
           selected_avatar: string
+          shields: number
           silver_coins: number
           updated_at: string
           username: string
@@ -366,6 +367,7 @@ export type Database = {
           highest_score?: number
           id: string
           selected_avatar?: string
+          shields?: number
           silver_coins?: number
           updated_at?: string
           username: string
@@ -382,6 +384,7 @@ export type Database = {
           highest_score?: number
           id?: string
           selected_avatar?: string
+          shields?: number
           silver_coins?: number
           updated_at?: string
           username?: string
