@@ -7,6 +7,9 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — Surf Riders 2.0" }, { name: "description", content: "Sign in or create your Surf Riders 2.0 account." }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   component: AuthPage,
 });
 
@@ -15,29 +18,48 @@ const schema = z.object({
   password: z.string().min(8, "At least 8 characters").max(72),
 });
 
+// Only same-origin relative paths are allowed as a post-auth redirect target.
+function safeNext(next: string | undefined): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+  return next;
+}
+
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const returnTo = safeNext(next);
+
+  function goPostAuth() {
+    if (returnTo) {
+      window.location.href = returnTo;
+      return;
+    }
+    navigate({ to: "/dashboard", replace: true });
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (data.session) goPostAuth();
     });
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const parsed = schema.safeParse({ email, password });
-    if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
+    if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
     setLoading(true);
     try {
       if (mode === "signup") {
+        const emailRedirectTo = window.location.origin + (returnTo ?? "/dashboard");
         const { error } = await supabase.auth.signUp({
           email, password,
-          options: { emailRedirectTo: window.location.origin + "/dashboard" },
+          options: { emailRedirectTo },
         });
         if (error) throw error;
         toast.success("Account created. Paddling out...");
@@ -46,7 +68,7 @@ function AuthPage() {
         if (error) throw error;
         toast.success("Welcome back, rider.");
       }
-      navigate({ to: "/dashboard", replace: true });
+      goPostAuth();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
     } finally {
