@@ -367,8 +367,9 @@ function Hud({
           <Pill icon={<Sword className="h-3.5 w-3.5 text-lagoon" />} label={`${weapon.icon} ${weapon.damage} dmg`} />
         </div>
         <div className="flex items-center gap-1.5">
-          <Pill icon={<Coins className="h-3.5 w-3.5 text-amber-300 drop-shadow-[0_0_4px_rgba(255,220,120,0.9)]" />} label={`${state.coins.toLocaleString()} Ag`} />
-          <Pill icon={<Coins className="h-3.5 w-3.5 text-sunset" />} label={`${goldCoins.toLocaleString()} Au`} />
+          <Pill icon={<Coins className="h-3.5 w-3.5 text-slate-200 drop-shadow-[0_0_4px_rgba(220,235,255,0.9)]" />} label={`${state.coins.toLocaleString()} Ag`} />
+          <Pill icon={<Coins className="h-3.5 w-3.5 text-sunset drop-shadow-[0_0_4px_rgba(255,180,80,0.9)]" />} label={`${goldCoins.toLocaleString()} Au`} />
+          {state.shieldActive && <Pill icon={<span className="text-sm">🛡️</span>} label="Shield" />}
           <Hearts count={state.health} />
         </div>
       </div>
@@ -461,8 +462,8 @@ function LevelCompleteOverlay({
         </div>
       </div>
       <p className="mt-1 text-center text-xs text-muted-foreground">Defeat the guardian monster to earn full rewards and unlock the next level.</p>
-      <OverlayButton onClick={onFight} icon={Sword}>Fight the Monster</OverlayButton>
-      <OverlayButton onClick={onShop} icon={ShoppingBag} variant="ghost">Visit Armory First</OverlayButton>
+      <OverlayButton onClick={onFight} icon={Sword}>Continue</OverlayButton>
+      <OverlayButton onClick={onShop} icon={ShoppingBag} variant="ghost">Visit Shop</OverlayButton>
     </Overlay>
   );
 }
