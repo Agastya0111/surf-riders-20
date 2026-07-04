@@ -539,13 +539,25 @@ export class SurfGame {
         this.state.combo += 1;
         this.state.comboTimer = 2.2;
         this.scoreFloat += 10 * this.state.multiplier;
-        this.burst(this.w / 2, this.h * 0.62, "#ffd166");
-      } else {
-        this.state.coins += 500; // silver per chest
+        this.burst(this.w / 2, this.h * 0.62, "#e6ecf5");
+      } else if (p.type === "gold") {
+        this.state.goldRun += 10; // in-run gold coin
+        this.state.combo += 2;
+        this.state.comboTimer = 2.5;
+        this.scoreFloat += 30 * this.state.multiplier;
+        this.burst(this.w / 2, this.h * 0.6, "#ffb86b");
+      } else if (p.type === "chest") {
+        this.state.coins += 500;    // silver chest bonus
+        this.state.goldRun += 25;   // treasure chest also drops gold
         this.state.combo += 5;
         this.state.comboTimer = 2.5;
         this.scoreFloat += 200;
         this.burst(this.w / 2, this.h * 0.6, "#ffb86b");
+      } else if (p.type === "shield") {
+        if (!this.state.shieldActive) {
+          this.state.shieldActive = true;
+          this.burst(this.w / 2, this.h * 0.62, "#7ad0ff");
+        }
       }
       this.emit();
     }
@@ -580,13 +592,23 @@ export class SurfGame {
 
   private spawnPickupRow() {
     const lane = ([-1, 0, 1] as Lane[])[Math.floor(Math.random() * 3)];
-    // chest occasionally
+    // Chest occasionally (silver + gold burst)
     if (this.distFloat >= this.nextChestAt) {
       this.nextChestAt += 220 + Math.random() * 180;
       this.pickups.push({ type: "chest", lane, z: FAR_Z, y: 0, collected: false });
       return;
     }
-    // line of 3-5 coins, maybe arcing
+    // Rare shield pickup (~4% of rows, at most once every ~30s of world distance)
+    if (Math.random() < 0.04) {
+      this.pickups.push({ type: "shield", lane, z: FAR_Z, y: 0.6, collected: false });
+      return;
+    }
+    // Occasional single gold coin (~10% of rows)
+    if (Math.random() < 0.1) {
+      this.pickups.push({ type: "gold", lane, z: FAR_Z, y: 0.4, collected: false });
+      return;
+    }
+    // line of 3-5 silver coins, maybe arcing
     const count = 3 + Math.floor(Math.random() * 3);
     const arc = Math.random() < 0.3;
     for (let i = 0; i < count; i++) {
@@ -594,6 +616,7 @@ export class SurfGame {
       this.pickups.push({ type: "coin", lane, z: FAR_Z + i * 1.4, y, collected: false });
     }
   }
+
 
   private takeHit() {
     this.state.health -= 1;
