@@ -12,12 +12,14 @@ export type GameState = {
   score: number;
   distance: number; // meters
   coins: number; // silver coins collected this run
+  goldRun: number; // gold coins collected this run (from chests / gold pickups)
   silverTarget: number; // required silver to complete level
   level: number;
   combo: number;
   comboTimer: number; // seconds remaining
   multiplier: number;
   health: number;
+  shieldActive: boolean;
   bossHealth: number;
   bossActive: boolean;
   bossDefeated: boolean;
@@ -26,7 +28,8 @@ export type GameState = {
 export type GameCallbacks = {
   onStateChange: (s: GameState) => void;
   onGameOver: (result: { score: number; coins: number; distance: number; bossDefeated: boolean }) => void;
-  onLevelComplete?: (silver: number, level: number) => void;
+  onLevelComplete?: (silver: number, level: number, goldRun: number) => void;
+  onShieldConsumed?: () => void;
 };
 
 export type GameOptions = {
@@ -36,6 +39,7 @@ export type GameOptions = {
   level?: number;
   silverTarget?: number;
   disableBoss?: boolean;
+  startWithShield?: boolean;
 };
 
 
@@ -50,12 +54,13 @@ type Obstacle = {
 };
 
 type Pickup = {
-  type: "coin" | "chest";
+  type: "coin" | "chest" | "gold" | "shield";
   lane: Lane;
   z: number;
   y: number; // vertical offset (for arcs)
   collected: boolean;
 };
+
 
 const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
 const ROAD_HALF_WIDTH = 1.6; // world units
