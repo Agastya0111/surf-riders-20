@@ -619,6 +619,15 @@ export class SurfGame {
 
 
   private takeHit() {
+    // Shield absorbs one hit, then breaks.
+    if (this.state.shieldActive) {
+      this.state.shieldActive = false;
+      this.invuln = 1.0;
+      this.burst(this.w / 2, this.h * 0.7, "#7ad0ff");
+      this.cb.onShieldConsumed?.();
+      this.emit();
+      return;
+    }
     this.state.health -= 1;
     this.state.combo = 0;
     this.state.comboTimer = 0;
