@@ -668,7 +668,11 @@ export class SurfGame {
     const t = Math.max(0.001, z / FAR_Z); // 0 near .. 1 far
     const persp = 1 / (z * 0.08 + 1); // 1 near .. small far
     const screenY = horizonY + (groundBottomY - horizonY) * (1 - t);
-    const laneScreenX = this.w / 2 + laneOffset * (this.w * 0.22) * persp;
+    // Dynamic lane width based on aspect ratio: wide landscape screens get a
+    // wider lane so the play field uses the horizontal space, phones stay tight.
+    const aspect = this.w / Math.max(1, this.h);
+    const laneSpread = Math.min(0.34, Math.max(0.22, 0.14 + aspect * 0.09));
+    const laneScreenX = this.w / 2 + laneOffset * (this.w * laneSpread) * persp;
     const scale = persp;
     return { x: laneScreenX, y: screenY - yWorld * 60 * persp, scale };
   }
