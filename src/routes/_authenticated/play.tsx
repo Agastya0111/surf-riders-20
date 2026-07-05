@@ -263,9 +263,19 @@ function PlayPage() {
           )}
 
           {phase === "game-over" && (
-            <Overlay title="Wipeout" subtitle="The wave got you. Try again — progress is not lost.">
-              <OverlayButton onClick={onRestartLevel} icon={RotateCw}>Retry Level {level}</OverlayButton>
-              <OverlayButton onClick={onHome} icon={Home} variant="ghost">Dashboard</OverlayButton>
+            <Overlay title="GAME OVER" subtitle="The wave got you. Progress is not lost.">
+              <OverlayButton onClick={onRestartLevel} icon={RotateCw}>Retry</OverlayButton>
+              <OverlayButton
+                onClick={async () => {
+                  gameRef.current?.destroy();
+                  await navigate({ to: "/armory" });
+                }}
+                icon={ShoppingBag}
+                variant="ghost"
+              >
+                Visit Shop
+              </OverlayButton>
+              <OverlayButton onClick={onHome} icon={Home} variant="ghost">Main Menu</OverlayButton>
             </Overlay>
           )}
 
