@@ -289,26 +289,42 @@ export class SurfGame {
     this.touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
   };
 
-  private touchEndHandler = (e: TouchEvent) => {
-    if (!this.touchStart || this.state.status !== "playing") { this.touchStart = null; return; }
-    const t = e.changedTouches[0];
+  private touchMoveHandler = (e: TouchEvent) => {
+    if (!this.touchStart || this.state.status !== "playing") return;
+    const t = e.touches[0];
     if (!t) return;
     const dx = t.clientX - this.touchStart.x;
     const dy = t.clientY - this.touchStart.y;
     const adx = Math.abs(dx), ady = Math.abs(dy);
-    const dt = performance.now() - this.touchStart.t;
-    const tapThresh = 24 / this.touchSens;
-    if (adx < tapThresh && ady < tapThresh && dt < 250) {
-
-      // tap or double-tap
-      const now = performance.now();
-      if (now - this.lastTap < 280) { this.doDash(); this.lastTap = 0; }
-      else this.lastTap = now;
-    } else if (adx > ady) {
+    // Fire swipe once motion crosses a low threshold — feels responsive on
+    // small phones where users flick quickly without lifting.
+    const swipeThresh = 34 / this.touchSens;
+    if (adx < swipeThresh && ady < swipeThresh) return;
+    if (adx > ady) {
       this.move(dx > 0 ? 1 : -1);
     } else {
       if (dy < 0) this.doJump(); else this.doSlide();
     }
+    // Reset origin so a continued gesture can register a second swipe.
+    this.touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+  };
+
+  private touchEndHandler = (e: TouchEvent) => {
+    if (!this.touchStart || this.state.status !== "playing") { this.touchStart = null; return; }
+    const t = e.changedTouches[0];
+    if (!t) { this.touchStart = null; return; }
+    const dx = t.clientX - this.touchStart.x;
+    const dy = t.clientY - this.touchStart.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const dt = performance.now() - this.touchStart.t;
+    const tapThresh = 20 / this.touchSens;
+    if (adx < tapThresh && ady < tapThresh && dt < 260) {
+      // tap or double-tap
+      const now = performance.now();
+      if (now - this.lastTap < 300) { this.doDash(); this.lastTap = 0; }
+      else this.lastTap = now;
+    }
+    // Swipe already handled in touchmove; no-op here.
     this.touchStart = null;
   };
 
@@ -317,6 +333,7 @@ export class SurfGame {
   private bindInput() {
     window.addEventListener("keydown", this.keyHandler);
     this.canvas.addEventListener("touchstart", this.touchStartHandler, { passive: true });
+    this.canvas.addEventListener("touchmove", this.touchMoveHandler, { passive: true });
     this.canvas.addEventListener("touchend", this.touchEndHandler, { passive: true });
     window.addEventListener("resize", this.resizeHandler);
   }
@@ -324,6 +341,7 @@ export class SurfGame {
   private unbindInput() {
     window.removeEventListener("keydown", this.keyHandler);
     this.canvas.removeEventListener("touchstart", this.touchStartHandler);
+    this.canvas.removeEventListener("touchmove", this.touchMoveHandler);
     this.canvas.removeEventListener("touchend", this.touchEndHandler);
     window.removeEventListener("resize", this.resizeHandler);
   }
