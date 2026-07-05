@@ -428,17 +428,17 @@ export class SurfGame {
       if (this.state.comboTimer <= 0) { this.state.combo = 0; }
     }
 
-    // spawn obstacles
+    // spawn obstacles — wider spacing gives players time to read the lane
     if (!this.state.bossActive && !this.bossSpawned) {
       this.spawnZ -= this.speed * dt;
       while (this.spawnZ <= 0) {
         this.spawnObstacleRow();
-        this.spawnZ += 6 + Math.random() * 4;
+        this.spawnZ += 9 + Math.random() * 5; // was 6 + rand*4
       }
       this.pickupSpawnZ -= this.speed * dt;
       while (this.pickupSpawnZ <= 0) {
         this.spawnPickupRow();
-        this.pickupSpawnZ += 3 + Math.random() * 3;
+        this.pickupSpawnZ += 4 + Math.random() * 4; // was 3 + rand*3
       }
     }
 
