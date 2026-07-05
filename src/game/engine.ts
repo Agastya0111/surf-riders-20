@@ -63,9 +63,10 @@ type Pickup = {
 
 
 const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
-const ROAD_HALF_WIDTH = 1.6; // world units
-const HORIZON_Y_RATIO = 0.46; // horizon slightly lower → more reaction time
-const FAR_Z = 80;
+// Landscape-first: wider lane, higher horizon, longer visible distance ahead.
+const ROAD_HALF_WIDTH = 2.1; // world units — wider gameplay lane
+const HORIZON_Y_RATIO = 0.40; // higher horizon = more track visible = more reaction time
+const FAR_Z = 110; // draw hazards much further ahead
 const NEAR_Z = 2;
 
 // Color-coded hazard palette (consistent across all worlds)
