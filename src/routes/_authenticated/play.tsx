@@ -474,6 +474,12 @@ function LevelCompleteOverlay({
       <p className="mt-1 text-center text-xs text-muted-foreground">Defeat the guardian monster to earn full rewards and unlock the next level.</p>
       <OverlayButton onClick={onFight} icon={Sword}>Continue</OverlayButton>
       <OverlayButton onClick={onShop} icon={ShoppingBag} variant="ghost">Visit Shop</OverlayButton>
+      <Link
+        to="/dashboard"
+        className="mt-1 flex w-full min-h-11 items-center justify-center gap-2 rounded-full bg-secondary px-5 py-3 text-sm font-bold text-foreground transition hover:bg-secondary/80"
+      >
+        <Home className="h-4 w-4" /> Main Menu
+      </Link>
     </Overlay>
   );
 }
