@@ -63,9 +63,10 @@ type Pickup = {
 
 
 const LANE_OFFSETS: Record<Lane, number> = { [-1]: -1, [0]: 0, [1]: 1 };
-const ROAD_HALF_WIDTH = 1.6; // world units
-const HORIZON_Y_RATIO = 0.46; // horizon slightly lower → more reaction time
-const FAR_Z = 80;
+// Landscape-first: wider lane, higher horizon, longer visible distance ahead.
+const ROAD_HALF_WIDTH = 2.1; // world units — wider gameplay lane
+const HORIZON_Y_RATIO = 0.40; // higher horizon = more track visible = more reaction time
+const FAR_Z = 110; // draw hazards much further ahead
 const NEAR_Z = 2;
 
 // Color-coded hazard palette (consistent across all worlds)
@@ -288,26 +289,42 @@ export class SurfGame {
     this.touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
   };
 
-  private touchEndHandler = (e: TouchEvent) => {
-    if (!this.touchStart || this.state.status !== "playing") { this.touchStart = null; return; }
-    const t = e.changedTouches[0];
+  private touchMoveHandler = (e: TouchEvent) => {
+    if (!this.touchStart || this.state.status !== "playing") return;
+    const t = e.touches[0];
     if (!t) return;
     const dx = t.clientX - this.touchStart.x;
     const dy = t.clientY - this.touchStart.y;
     const adx = Math.abs(dx), ady = Math.abs(dy);
-    const dt = performance.now() - this.touchStart.t;
-    const tapThresh = 24 / this.touchSens;
-    if (adx < tapThresh && ady < tapThresh && dt < 250) {
-
-      // tap or double-tap
-      const now = performance.now();
-      if (now - this.lastTap < 280) { this.doDash(); this.lastTap = 0; }
-      else this.lastTap = now;
-    } else if (adx > ady) {
+    // Fire swipe once motion crosses a low threshold — feels responsive on
+    // small phones where users flick quickly without lifting.
+    const swipeThresh = 34 / this.touchSens;
+    if (adx < swipeThresh && ady < swipeThresh) return;
+    if (adx > ady) {
       this.move(dx > 0 ? 1 : -1);
     } else {
       if (dy < 0) this.doJump(); else this.doSlide();
     }
+    // Reset origin so a continued gesture can register a second swipe.
+    this.touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+  };
+
+  private touchEndHandler = (e: TouchEvent) => {
+    if (!this.touchStart || this.state.status !== "playing") { this.touchStart = null; return; }
+    const t = e.changedTouches[0];
+    if (!t) { this.touchStart = null; return; }
+    const dx = t.clientX - this.touchStart.x;
+    const dy = t.clientY - this.touchStart.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const dt = performance.now() - this.touchStart.t;
+    const tapThresh = 20 / this.touchSens;
+    if (adx < tapThresh && ady < tapThresh && dt < 260) {
+      // tap or double-tap
+      const now = performance.now();
+      if (now - this.lastTap < 300) { this.doDash(); this.lastTap = 0; }
+      else this.lastTap = now;
+    }
+    // Swipe already handled in touchmove; no-op here.
     this.touchStart = null;
   };
 
@@ -316,6 +333,7 @@ export class SurfGame {
   private bindInput() {
     window.addEventListener("keydown", this.keyHandler);
     this.canvas.addEventListener("touchstart", this.touchStartHandler, { passive: true });
+    this.canvas.addEventListener("touchmove", this.touchMoveHandler, { passive: true });
     this.canvas.addEventListener("touchend", this.touchEndHandler, { passive: true });
     window.addEventListener("resize", this.resizeHandler);
   }
@@ -323,6 +341,7 @@ export class SurfGame {
   private unbindInput() {
     window.removeEventListener("keydown", this.keyHandler);
     this.canvas.removeEventListener("touchstart", this.touchStartHandler);
+    this.canvas.removeEventListener("touchmove", this.touchMoveHandler);
     this.canvas.removeEventListener("touchend", this.touchEndHandler);
     window.removeEventListener("resize", this.resizeHandler);
   }
@@ -427,17 +446,17 @@ export class SurfGame {
       if (this.state.comboTimer <= 0) { this.state.combo = 0; }
     }
 
-    // spawn obstacles
+    // spawn obstacles — wider spacing gives players time to read the lane
     if (!this.state.bossActive && !this.bossSpawned) {
       this.spawnZ -= this.speed * dt;
       while (this.spawnZ <= 0) {
         this.spawnObstacleRow();
-        this.spawnZ += 6 + Math.random() * 4;
+        this.spawnZ += 9 + Math.random() * 5; // was 6 + rand*4
       }
       this.pickupSpawnZ -= this.speed * dt;
       while (this.pickupSpawnZ <= 0) {
         this.spawnPickupRow();
-        this.pickupSpawnZ += 3 + Math.random() * 3;
+        this.pickupSpawnZ += 4 + Math.random() * 4; // was 3 + rand*3
       }
     }
 
@@ -667,7 +686,11 @@ export class SurfGame {
     const t = Math.max(0.001, z / FAR_Z); // 0 near .. 1 far
     const persp = 1 / (z * 0.08 + 1); // 1 near .. small far
     const screenY = horizonY + (groundBottomY - horizonY) * (1 - t);
-    const laneScreenX = this.w / 2 + laneOffset * (this.w * 0.22) * persp;
+    // Dynamic lane width based on aspect ratio: wide landscape screens get a
+    // wider lane so the play field uses the horizontal space, phones stay tight.
+    const aspect = this.w / Math.max(1, this.h);
+    const laneSpread = Math.min(0.34, Math.max(0.22, 0.14 + aspect * 0.09));
+    const laneScreenX = this.w / 2 + laneOffset * (this.w * laneSpread) * persp;
     const scale = persp;
     return { x: laneScreenX, y: screenY - yWorld * 60 * persp, scale };
   }
